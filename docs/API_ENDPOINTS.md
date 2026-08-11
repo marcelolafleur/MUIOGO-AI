@@ -87,6 +87,30 @@ The registry's location comes from `MUIOGO_OG_DATA_DIR` (default
 `~/.muiogo/og-models`). A server started without those pointed at the right
 place will not see models registered elsewhere.
 
+## The /clews layer: CLEWs country installs (MUIOGO PR #519+, not yet at the pin)
+
+The CLEWs twin of `/ogc`: where `/ogc` installs code (an OG model repo with its
+own venv), `/clews` installs data — case archives declared in a country repo's
+`clews-country.json` manifest, downloaded and sha256-verified by the server,
+then imported through the same pipeline the GUI's restore uses. Added by
+EAPD-DRB/MUIOGO PR #519; a server at the current pin answers 404 on all of
+these (the client and install.sh degrade to the legacy path).
+
+| Endpoint | Method | Notes |
+|---|---|---|
+| `/getVersion` | GET | `{muio_version, accepted_case_versions}` — check before sending archives |
+| `/clews/getCountryCatalog` | GET | rows under **`countries`**; empty + `catalog_source: "none"` unless a register URL is configured (`MUIOGO_CLEWS_CATALOG_URL`) |
+| `/clews/getInstalledCountries` | GET | rows under **`cases`** — every case with provenance, reconciled against DataStorage on each read; hand-added cases show `managed: false` |
+| `/clews/inspectSource` | POST | `{source_type: repo_url\|local_path, ...}` → the manifest's menu (vintages, cases, collisions, version gate), nothing downloaded |
+| `/clews/installCountry` | POST | same body + optional `vintage`, `cases[]`; **asynchronous job**, checksum mismatch installs nothing, existing cases report `already_exists` |
+| `/clews/getInstallStatus` | GET | `?install_id=` — per-case `results` on completion |
+| `/clews/checkCountryUpdate` | POST | `{casename}` — compares recorded vs published checksum; check-only |
+| `/clews/cancelInstall` | POST | `{install_id}` |
+
+There is deliberately no unregister and no overwrite: the installed list follows
+the disk (remove a case with `/deleteCase`), and replacing a case is a
+deliberate delete + reinstall.
+
 ## Present, not yet exercised
 
 From `API/Routes/` at the same commit — payloads unverified:

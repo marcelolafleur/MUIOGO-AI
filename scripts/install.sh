@@ -757,9 +757,52 @@ start_muiogo() {
 }
 start_muiogo
 
-# 5a. install CLEWs country case(s) through MUIOGO's own /uploadCase endpoint
-# (the same validated path the GUI's restore uses).
+# 5a. install CLEWs country case(s).
+# Preferred: MUIOGO's own /clews install layer (PR #519+) driven by the country
+# repo's clews-country.json — the server downloads, checksum-verifies and imports.
+# Fallback: the original client-side path (download + sha256 here, then
+# /uploadCase), used when the pinned MUIOGO predates /clews or the country repo
+# does not carry a manifest yet.
 declare -a CLEWS_INSTALLED_CASES=() CLEWS_INSTALLED_KEYS=()
+HAS_CLEWS_LAYER=0
+if [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://127.0.0.1:${PORT}/clews/getInstalledCountries")" == "200" ]]; then
+    HAS_CLEWS_LAYER=1
+fi
+install_clews_via_api() { # install_clews_via_api REPO_URL CASE_OVERRIDE -> prints installed case names
+    local body inst_id state
+    body="$(python3 - "$1" "$2" <<'PY'
+import json, sys
+payload = {"source_type": "repo_url", "repo_url": sys.argv[1]}
+if sys.argv[2]:
+    payload["cases"] = [sys.argv[2]]
+print(json.dumps(payload))
+PY
+)"
+    inst_id="$(curl -s -m 30 -H "Content-Type: application/json" -d "$body" \
+        "http://127.0.0.1:${PORT}/clews/installCountry" \
+        | python3 -c "import json,sys; print(json.load(sys.stdin).get('install_id',''))" 2>/dev/null)"
+    [[ -z "$inst_id" ]] && return 1
+    local deadline=$(( $(date +%s) + 600 ))
+    while [[ $(date +%s) -lt $deadline ]]; do
+        state="$(api "/clews/getInstallStatus?install_id=$inst_id" 15)"
+        case "$(echo "$state" | python3 -c "import json,sys; print(json.load(sys.stdin).get('install_state',''))" 2>/dev/null)" in
+            installed)
+                echo "$state" | python3 -c "
+import json, sys
+for r in json.load(sys.stdin).get('results') or []:
+    if r.get('status') in ('installed', 'already_exists'):
+        print(r['case'])"
+                return 0 ;;
+            failed)
+                # >&2: this function's stdout is captured as the case list.
+                warn "server-side install failed: $(echo "$state" | python3 -c "import json,sys; print(json.load(sys.stdin).get('error',''))" 2>/dev/null)" >&2
+                return 1 ;;
+        esac
+        sleep 3
+    done
+    warn "server-side install timed out" >&2
+    return 1
+}
 if [[ -n "$CLEWS_KEYS" ]]; then
     IFS=',' read -ra CKEYS <<< "$CLEWS_KEYS"
     for ckey in "${CKEYS[@]}"; do
@@ -772,6 +815,25 @@ for r in data["repos"]:
         print(r["iso3"]); break
 ' "$AI_DIR/clews/clews-repos.json" "$ckey")"
         [[ -z "$ISO3" ]] && die "CLEWs key '$ckey' not in clews/clews-repos.json"
+        if [[ $HAS_CLEWS_LAYER -eq 1 ]]; then
+            CREPO_URL="$(python3 -c '
+import json, sys
+data = json.load(open(sys.argv[1]))
+for r in data["repos"]:
+    if r["key"] == sys.argv[2]:
+        print("https://github.com/%s/%s" % (r["owner"], r["repo"])); break
+' "$AI_DIR/clews/clews-repos.json" "$ckey")"
+            echo "  trying MUIOGO's /clews install layer for $ckey"
+            NEWCASES="$(install_clews_via_api "$CREPO_URL" "$CASE_OVERRIDE")" && [[ -n "$NEWCASES" ]] && {
+                while IFS= read -r NCASE; do
+                    ok "case installed in MUIOGO (server-side, checksum-verified): $NCASE"
+                    CLEWS_INSTALLED_CASES+=("$NCASE"); CLEWS_INSTALLED_KEYS+=("$ckey")
+                    record "$ckey" OK "$NCASE"
+                done <<< "$NEWCASES"
+                continue
+            }
+            echo "  /clews path unavailable for $ckey (no manifest in the repo yet?) — using the legacy path"
+        fi
         CMANIFEST="$AI_DIR/clews/countries/$ISO3.json"
         [[ -f "$CMANIFEST" ]] || die "missing CLEWs manifest: $CMANIFEST"
         SEL="$(python3 -c '

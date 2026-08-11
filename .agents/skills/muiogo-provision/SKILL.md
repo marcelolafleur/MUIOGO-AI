@@ -91,6 +91,22 @@ checks and post-import fixups all apply. The command reports the case name that
 appeared, and fails loudly if none did — never assume an import worked because
 the command returned.
 
+When the MUIOGO behind the setup includes the `/clews` install layer
+(EAPD-DRB/MUIOGO PR #519 or newer — not yet at the current pin), prefer
+installing a country straight from its repository instead of handling zips:
+
+```bash
+muiogo-ai clews inspect --repo-url https://github.com/EAPD-DRB/CLEWs-PHL
+muiogo-ai clews install --repo-url https://github.com/EAPD-DRB/CLEWs-PHL
+```
+
+The server reads the repo's `clews-country.json`, downloads the recommended
+case archive, verifies it against the repo's published checksums (a mismatch
+installs nothing), and imports it — recording provenance you can later check
+with `muiogo-ai clews installed` and `muiogo-ai clews update-check`. If the
+command reports the server has no `/clews` layer, or the repo carries no
+manifest yet, fall back to the zip import above.
+
 Then confirm and check it before trusting it:
 
 ```bash

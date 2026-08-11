@@ -786,6 +786,67 @@ def cmd_og(args):
     return 0
 
 
+def cmd_clews(args):
+    client = _client(args)
+    cmd = args.clews_command
+    if cmd == "catalog":
+        rows = client.clews_catalog()
+        if not rows:
+            print("no CLEWs country register configured on this server "
+                  "(install by --repo-url or --path instead)")
+            return 0
+        for entry in rows:
+            print(f"  {entry.get('catalog_key',''):<12} {entry.get('iso3',''):<5} "
+                  f"{entry.get('country_name','')[:38]:<40}{entry.get('install_state','')}")
+        return 0
+    if cmd == "installed":
+        rows = client.clews_installed()
+        if not rows:
+            print("no cases on this server")
+            return 0
+        for entry in rows:
+            tag = entry.get("iso3") or ("untracked" if not entry.get("managed") else "")
+            print(f"  {entry.get('casename','')[:44]:<46} {tag:<10} "
+                  f"{entry.get('vintage') or ''}")
+        return 0
+    if cmd == "update-check":
+        body = client.clews_update_check(args.case_name)
+        print(body.get("message", body))
+        return 0 if not body.get("update_available") else 2
+    if cmd == "inspect":
+        menu = client.clews_inspect(repo_url=args.repo_url, local_path=args.path,
+                                    ref=args.ref)
+        print(f"{menu.get('name')} ({menu.get('iso3')})")
+        for v in menu.get("vintages", []):
+            star = " (recommended)" if v.get("recommended") else ""
+            gate = f"  [needs MUIO {v.get('muio_min_version')}]" if v.get("version_gate") else ""
+            print(f"  vintage {v['id']}{star}{gate}")
+            for c in v.get("cases", []):
+                mark = " (recommended)" if c.get("recommended") else ""
+                exists = "  [already installed]" if c.get("already_exists") else ""
+                print(f"    {c['case']}{mark}{exists}")
+        return 0
+    # install
+    body = client.clews_install(repo_url=args.repo_url, local_path=args.path,
+                                ref=args.ref, vintage=args.vintage,
+                                cases=args.case or None)
+    install_id = body.get("install_id")
+    print(f"install started: {install_id}  ({body.get('install_state')})")
+    import time
+    for _ in range(360):
+        status = client.clews_install_status(install_id)
+        state = status.get("install_state")
+        if state in ("installed", "failed"):
+            for r in status.get("results") or []:
+                print(f"  {r.get('case','')}: {r.get('status','')}")
+            if state == "failed" and status.get("error"):
+                print(f"  {status['error']}", file=sys.stderr)
+            return 0 if state == "installed" else 1
+        time.sleep(2)
+    print("  still running — check with: muiogo clews installed", file=sys.stderr)
+    return 1
+
+
 def cmd_stop(args):
     """Stop the server this workspace started, by pid rather than by port."""
     root = args.root
@@ -976,6 +1037,24 @@ def main(argv=None):
     q.add_argument("--branch")
     q.add_argument("--wait", action="store_true", help="poll until it finishes")
     p.set_defaults(func=cmd_og)
+
+    p = sub.add_parser("clews", help="CLEWs country models: catalog, inspect, install")
+    clsub = p.add_subparsers(dest="clews_command", required=True)
+    clsub.add_parser("catalog", help="country repos in the configured register")
+    clsub.add_parser("installed", help="cases on this server, with provenance")
+    q = clsub.add_parser("update-check", help="is a newer archive published for a case?")
+    q.add_argument("case_name", help="installed case name")
+    for name, hlp in (("inspect", "read a country repo's manifest (no download)"),
+                      ("install", "install a country's case(s), checksum-verified")):
+        q = clsub.add_parser(name, help=hlp)
+        q.add_argument("--repo-url", help="GitHub repository, e.g. https://github.com/EAPD-DRB/CLEWs-PHL")
+        q.add_argument("--path", help="local folder with a clews-country.json instead")
+        q.add_argument("--ref", help="branch or tag (default: main)")
+        if name == "install":
+            q.add_argument("--vintage", help="vintage id (default: the recommended one)")
+            q.add_argument("--case", action="append",
+                           help="case name; repeat for several (default: recommended)")
+    p.set_defaults(func=cmd_clews)
 
     p = sub.add_parser("serve", help="run a headless MUIOGO server in the foreground")
     p.add_argument("--root", help="MUIOGO checkout (default: from manifest)")

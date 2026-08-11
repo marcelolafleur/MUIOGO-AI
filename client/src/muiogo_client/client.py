@@ -348,6 +348,115 @@ class MuiogoClient:
         r = self._get("/ogc/getInstallStatus", params={"install_id": install_id})
         return r.json()
 
+    # -- CLEWs country models (/clews, MUIOGO PR #519 or newer) ---------------
+    #
+    # The CLEWs twin of the /ogc layer: where /ogc installs CODE (an OG model
+    # repo with its own venv), /clews installs DATA (verified case archives,
+    # imported through the same pipeline the GUI's restore uses). A country
+    # repository declares what it ships in a clews-country.json manifest.
+
+    _NO_CLEWS = ("this MUIOGO has no CLEWs install layer (/clews). It needs a "
+                 "MUIOGO that includes EAPD-DRB/MUIOGO PR #519; check the pin.")
+
+    def _clews_capability_gap(self, r):
+        """Did this error mean 'no /clews layer on this server'?
+
+        A pre-#519 MUIOGO answers an unknown GET with 404 and an unknown POST
+        with 405 (its static-file route matches every GET path, so a POST to a
+        nonexistent route is 'method not allowed'). Both arrive as Flask's HTML
+        error page. A REAL /clews error (unknown install_id, no provenance) is
+        JSON with a message -- so JSON means the layer is there.
+        """
+        if r.status_code not in (404, 405):
+            return False
+        try:
+            r.json()
+        except ValueError:
+            return True
+        return False
+
+    def _clews_get(self, path, **kwargs):
+        r = self._http.get(f"{self.base_url}{path}", timeout=self.timeout, **kwargs)
+        if self._clews_capability_gap(r):
+            raise MuiogoError(self._NO_CLEWS)
+        if not r.ok:
+            raise self._explain(r, path)
+        return r
+
+    def _clews_post(self, path, payload):
+        r = self._http.post(f"{self.base_url}{path}", json=payload, timeout=self.timeout)
+        if self._clews_capability_gap(r):
+            raise MuiogoError(self._NO_CLEWS)
+        if not r.ok:
+            raise self._explain(r, path)
+        body = r.json()
+        if isinstance(body, dict) and body.get("status_code") == "error":
+            raise MuiogoError(body.get("message") or str(body))
+        return body
+
+    def has_clews_layer(self):
+        """True if this server carries the /clews endpoints."""
+        r = self._http.get(f"{self.base_url}/clews/getInstalledCountries",
+                           timeout=self.timeout)
+        return r.ok
+
+    def get_version(self):
+        """{'muio_version', 'accepted_case_versions'} — also #519 or newer."""
+        r = self._http.get(f"{self.base_url}/getVersion", timeout=self.timeout)
+        if r.status_code == 404:
+            raise MuiogoError(self._NO_CLEWS)
+        if not r.ok:
+            raise self._explain(r, "/getVersion")
+        return r.json()
+
+    def clews_catalog(self):
+        """CLEWs country repos in the configured register (may be empty)."""
+        body = self._clews_get("/clews/getCountryCatalog").json()
+        return body.get("countries") or []
+
+    def clews_installed(self):
+        """Every case on the server with provenance, reconciled against disk."""
+        body = self._clews_get("/clews/getInstalledCountries").json()
+        return body.get("cases") or []
+
+    def clews_inspect(self, repo_url=None, local_path=None, ref=None):
+        """Read a country repo's manifest: vintages, cases, collisions, gate."""
+        payload = self._clews_source(repo_url, local_path, ref)
+        return self._clews_post("/clews/inspectSource", payload)
+
+    def clews_install(self, repo_url=None, local_path=None, ref=None,
+                      vintage=None, cases=None):
+        """Start a country install (asynchronous). Returns {'install_id', ...}.
+
+        Default: the manifest's recommended vintage and case(s). Existing cases
+        are never overwritten -- they report already_exists in the results.
+        """
+        payload = self._clews_source(repo_url, local_path, ref)
+        if vintage:
+            payload["vintage"] = vintage
+        if cases:
+            payload["cases"] = list(cases)
+        return self._clews_post("/clews/installCountry", payload)
+
+    def clews_install_status(self, install_id):
+        return self._clews_get("/clews/getInstallStatus",
+                               params={"install_id": install_id}).json()
+
+    def clews_update_check(self, case):
+        """Compare one installed case's checksum with what its source publishes."""
+        return self._clews_post("/clews/checkCountryUpdate", {"casename": case})
+
+    @staticmethod
+    def _clews_source(repo_url, local_path, ref):
+        if bool(repo_url) == bool(local_path):
+            raise MuiogoError("give exactly one of repo_url or local_path")
+        if repo_url:
+            payload = {"source_type": "repo_url", "repo_url": repo_url}
+            if ref:
+                payload["ref"] = ref
+            return payload
+        return {"source_type": "local_path", "local_path": str(local_path)}
+
     def delete_run(self, case, run, results_only=False):
         return self._post_json(
             "/deleteCaseRun",
