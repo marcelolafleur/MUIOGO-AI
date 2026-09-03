@@ -1,50 +1,31 @@
 # Draft upstream issue for EAPD-DRB/MUIOGO
 
-Status: draft, not yet opened. Written 2026-09-03 after updating OG-PHL by hand
-in an installed MUIOGO-AI world (see `docs/API_ENDPOINTS.md`, "Updating a
-locally-registered model"). Open it in EAPD-DRB/MUIOGO once approved; keep the
-plain-language voice.
+Status: draft, not yet opened (2026-09-03). Background in `docs/API_ENDPOINTS.md`,
+"Updating a locally-registered model".
 
 ---
 
-**Title:** OG-Core page: let users update a country model that the installer set up
+**Title:** OG-Core page: no way to update a model installed by the installer
 
 **Body:**
 
-When a newer version of a country model exists, the OG-Core page tells the user
-so, but gives them no way to get it.
+"Check for updates" on a model card says a newer version exists, but the card
+only offers "Update the local folder to get this version" and no Update button.
+The button is reserved for models installed from a Git URL; models registered
+from a local folder are never pulled, to protect development copies. The
+MUIOGO-AI installer registers every model from a local folder, so in an
+installed world no model can be updated from the UI.
 
-What a user sees today:
+Also, after the user pulls by hand, "Check again" resets the state to
+"installed" but keeps the old commit hash in the registry.
 
-1. On the model's card they click the refresh icon ("Check for updates").
-2. The card changes to "Update the local folder to get this version" with a
-   "Check again" button. There is no Update button.
-3. Nothing explains what "update the local folder" means. To do it, the user has
-   to know to run a git pull and a `uv sync --extra dev` in the model's folder.
-4. If they manage that and click "Check again", the card goes back to
-   "installed", but the version MUIOGO records for the model stays at the old
-   one. Only removing the model and adding the folder again corrects it.
+Proposed:
 
-Why this happens: the Update button is only shown for models installed from a
-Git URL through the OG-Core page itself. Models registered from a local folder
-are deliberately never pulled over, so that MUIOGO cannot damage someone's own
-development copy. That protection is right. But the MUIOGO-AI one-line installer
-sets up every country model as a local folder (it clones with the OG-Core
-universal installer, then registers the folder), so in an installed world no
-model ever gets an Update button.
+1. Show the Update button for a local folder whose tree is clean and whose
+   branch tracks a remote (or let the register call flag the folder as
+   installer-managed).
+2. When a check finds the folder already at the latest version, store that
+   commit in the registry.
 
-Two changes would fix it:
-
-1. **Show the Update button for folders that are safe to update.** A folder is
-   safe when its working tree is clean and its branch tracks a remote. Either
-   check that at refresh time, or let the register call mark the folder as
-   managed by an installer (a small `managed: true` flag on the record) so the
-   refusal stays for real development copies.
-2. **Record the new version after a check.** When "Check for updates" finds the
-   local folder already at the latest version, store that commit as the model's
-   version instead of leaving the old one in place.
-
-Until then, MUIOGO-AI ships an installer update mode
-(`./scripts/install.sh --update`) that pulls, re-syncs and re-registers the
-models it installed, and its README points users there. Happy to open a PR for
-either change if the approach suits.
+Workaround for now: `./scripts/install.sh --update` in MUIOGO-AI. Happy to
+open a PR for either change.
