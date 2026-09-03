@@ -1,6 +1,7 @@
 # Draft upstream issue for EAPD-DRB/MUIOGO
 
-Status: opened 2026-09-03 as EAPD-DRB/MUIOGO#543 (https://github.com/EAPD-DRB/MUIOGO/issues/543). Background in `docs/API_ENDPOINTS.md`,
+Status: opened 2026-09-03 as EAPD-DRB/MUIOGO#543 (https://github.com/EAPD-DRB/MUIOGO/issues/543);
+fix proposed the same day as EAPD-DRB/MUIOGO#544 (https://github.com/EAPD-DRB/MUIOGO/pull/544). Background in `docs/API_ENDPOINTS.md`,
 "Updating a locally-registered model".
 
 ---
