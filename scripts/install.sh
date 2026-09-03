@@ -34,6 +34,9 @@
 #   --case NAME         Override the recommended case (single --clews/--country only)
 #   --og-home DIR       Where OG models and their registry live (default: inside
 #                       --dest, keeping this installation self-contained)
+#   --update            Bring every OG model already installed here up to the
+#                       latest upstream (git pull, venv re-sync, registry refresh).
+#                       Only touches clean clones on a tracking branch.
 #   --no-link           Skip ogclews-link
 #   --no-demo-data      Pass through to the MUIOGO installer
 #   --no-verify         Skip the final verification battery (discouraged)
@@ -59,6 +62,7 @@ CLEWS_KEYS=""
 COUNTRIES=""
 CASE_OVERRIDE=""
 OG_HOME=""      # defaults to the workspace; see below
+UPDATE_MODELS=0
 WITH_LINK=1
 NO_DEMO_DATA=0
 NO_VERIFY=0
@@ -96,6 +100,10 @@ Options:
       --case NAME         Use a specific CLEWs case instead of the recommended one.
       --og-home DIR       Where OG models and their registry live
                           (default: inside --dest, so nothing is shared).
+      --update            Update every OG model installed here to the latest
+                          upstream version: pull, re-sync its environment, and
+                          refresh MUIOGO's registry. Skips a clone that has
+                          local changes or is not on a tracking branch.
       --no-link           Skip ogclews-link.
       --no-demo-data      Don't install MUIOGO's demo data.
       --no-verify         Skip the final verification battery (discouraged).
@@ -109,6 +117,7 @@ Examples:
   $0 --country PHL                            # add the Philippine OG + CLEWs pair
   $0 --country PHL --yes --skills-tool claude # hands-free, skills installed
   $0 --og og-zaf,og-idn --no-link             # two OG models, no link
+  $0 --update                                 # update the installed OG models
 EOF
 }
 
@@ -120,6 +129,7 @@ while [[ $# -gt 0 ]]; do
         --country)      COUNTRIES="$2"; shift 2 ;;
         --case)         CASE_OVERRIDE="$2"; shift 2 ;;
         --og-home)      OG_HOME="$2";   shift 2 ;;
+        --update)       UPDATE_MODELS=1; shift ;;
         --no-link)      WITH_LINK=0;    shift ;;
         --no-demo-data) NO_DEMO_DATA=1; shift ;;
         --no-verify)    NO_VERIFY=1;    shift ;;
@@ -413,6 +423,19 @@ mkdir -p "$OG_HOME/og-models" "$OG_HOME/og-state"
 OG_HOME="$(cd "$OG_HOME" && pwd)"
 ok "workspace: $DEST"
 
+# --update: every model already under og-models joins this run's OG list, so the
+# step-3 loop below visits it (pull + re-sync) and step 5b re-registers it. The
+# key is derived the same way the manifest does it: OG-PHL -> og-phl.
+if [[ $UPDATE_MODELS -eq 1 ]]; then
+    for mdir in "$OG_HOME"/og-models/*/; do
+        [[ -d "$mdir/.git" ]] || continue
+        mname="$(basename "$mdir")"
+        mkey="og-$(echo "${mname##*-}" | tr '[:upper:]' '[:lower:]')"
+        case ",$OG_KEYS," in *",$mkey,"*) ;; *) OG_KEYS="${OG_KEYS:+$OG_KEYS,}$mkey" ;; esac
+    done
+    [[ -z "$OG_KEYS" ]] && warn "--update: no OG models found under $OG_HOME/og-models"
+fi
+
 # ── the installation must not land inside the source checkout ─────────────────
 THIS_REPO="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 if same_dir "$DEST" "$THIS_REPO"; then
@@ -676,12 +699,60 @@ for r in data["repos"]:
         print(r["repo"], r["package"], r["description"].replace(" ", "_"))
         break
 ' "$key")"
-        [[ -z "$ENTRY" ]] && die "OG key '$key' not in the upstream catalog"
+        if [[ -z "$ENTRY" ]]; then
+            # A model installed from a URL outside the catalogue cannot be looked
+            # up here; on --update that is a skip, on an explicit --og a mistake.
+            if [[ $UPDATE_MODELS -eq 1 ]]; then
+                warn "$key is installed but not in the upstream catalogue — not updating it"
+                record "update-$key" SKIP "not in catalogue"; continue
+            fi
+            die "OG key '$key' not in the upstream catalog"
+        fi
         read -r REPO PKG DESC <<< "$ENTRY"
         MODEL_DIR="$OG_HOME/og-models/$REPO"
         IMPORT_NAME="${PKG//-/_}"
         MODEL_PY="$MODEL_DIR/.venv/bin/python"
         [[ -x "$MODEL_PY" ]] || MODEL_PY="$MODEL_DIR/.venv/Scripts/python.exe"
+
+        # --update: fast-forward the clone and re-sync its venv, then fall through
+        # to the import check and (in 5b) the registry refresh. Guarded the way
+        # MUIOGO itself guards local clones: never over uncommitted work, never
+        # off a tracking branch — those are someone's development checkout.
+        if [[ $UPDATE_MODELS -eq 1 && -d "$MODEL_DIR/.git" ]]; then
+            # Tracked files only: a stray .venv or notebook is not "someone's
+            # work", and a fast-forward pull cannot destroy untracked files anyway.
+            if [[ -n "$(git -C "$MODEL_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+                warn "$key has local changes in $MODEL_DIR — not updating it"
+                record "update-$key" SKIP "local changes"
+            elif ! git -C "$MODEL_DIR" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+                warn "$key is not on a branch that tracks its remote — not updating it"
+                record "update-$key" SKIP "no tracking branch"
+            else
+                BEFORE_REF="$(git -C "$MODEL_DIR" rev-parse --short=8 HEAD)"
+                UPD_LOG="$DEST/og-update-$key.log"
+                if ! git -C "$MODEL_DIR" pull --ff-only --quiet > "$UPD_LOG" 2>&1; then
+                    warn "$key: git pull failed — see $UPD_LOG"
+                    record "update-$key" FAIL "git pull"
+                else
+                    AFTER_REF="$(git -C "$MODEL_DIR" rev-parse --short=8 HEAD)"
+                    if [[ "$BEFORE_REF" == "$AFTER_REF" ]]; then
+                        ok "$key already at the latest upstream ($AFTER_REF)"
+                        record "update-$key" OK "already current ($AFTER_REF)"
+                    else
+                        echo "  $key: $BEFORE_REF -> $AFTER_REF, re-syncing its environment (a few minutes)"
+                        # --extra dev matches MUIOGO's own installer; a plain
+                        # `uv sync` would strip the dev tools it installed.
+                        if ( cd "$MODEL_DIR" && clean_env uv sync --extra dev >> "$UPD_LOG" 2>&1 ); then
+                            ok "$key updated $BEFORE_REF -> $AFTER_REF"
+                            record "update-$key" OK "$BEFORE_REF -> $AFTER_REF"
+                        else
+                            warn "$key: uv sync failed after the pull — see $UPD_LOG"
+                            record "update-$key" FAIL "uv sync"
+                        fi
+                    fi
+                fi
+            fi
+        fi
 
         # "A venv exists" is not "the model is installed". If a previous attempt
         # created the venv and then died mid-sync, skipping on the venv alone

@@ -99,6 +99,30 @@ Leave that window open. For the web interface, open
 [http://127.0.0.1:5102](http://127.0.0.1:5102) in your browser. Press
 Ctrl+C in the terminal to stop.
 
+## Update a country model
+
+Country models (OG-PHL and the others) keep improving upstream. To see whether
+a newer version exists, open MUIOGO's **OG-Core** page and click the refresh
+icon on the model's card ("Check for updates"). If it says a newer version is
+available, stop MUIOGO and run the installer in update mode from the
+`MUIOGO-AI` folder:
+
+```bash
+muiogo-ai stop
+```
+
+```bash
+./scripts/install.sh --update
+```
+
+It pulls the latest version of every model installed here, rebuilds each one's
+environment (a few minutes per model), and refreshes MUIOGO's registry. Models
+with local changes are left alone and reported. Then start MUIOGO again.
+
+The card's own "Update" button is not offered for these models yet: MUIOGO will
+not pull over a folder it did not clone itself, to protect people's development
+copies. The installer knows these folders are its own, so it can.
+
 ## If something goes wrong
 
 - **"destination path 'MUIOGO-AI' already exists and is not an empty

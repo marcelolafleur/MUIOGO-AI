@@ -81,6 +81,20 @@ Two things that will bite:
   (`<og-state>/og_calibrations_installed.json`) appears only once the job
   finishes. Poll `getInstallStatus`, or re-read the registry, rather than
   checking straight after the call.
+- **Updating a locally-registered model takes three calls, not one**
+  (verified 2026-09-03, updating OG-PHL). `refreshCalibration` with
+  `check_only: false` refuses any record whose `source_type` is `local_path`
+  ("update that clone yourself, then refresh"), and every model that
+  `install.sh` sets up is registered that way. With `check_only: true` it
+  fetches, compares HEAD to the upstream, and rewrites `install_state` and
+  `last_checked_at`, but it leaves `commit_sha` at the old value even after the
+  clone has been pulled. The working sequence is: `git pull --ff-only` in the
+  clone; `uv sync --extra dev` there (the flag the installer itself uses, a
+  plain `uv sync` strips the dev tools); then `registerLocalCalibration` again
+  with `run_uv_sync: false`, which re-verifies the import and refreshes
+  `commit_sha`, `install_id` and `last_updated_at`. A one-call update for
+  `local_path` records, or at least a `refreshCalibration` that records the
+  new HEAD, is a fix to propose upstream.
 
 The registry's location comes from `MUIOGO_OG_DATA_DIR` (default
 `~/.muiogo/og-state`), and models from `MUIOGO_OG_MODELS_DIR` (default
