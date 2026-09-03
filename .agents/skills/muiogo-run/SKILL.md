@@ -66,8 +66,9 @@ a detached server never leaves untracked files in a model repository.
 Two things to know. The port comes from the setup, and the two differ on
 purpose: an installed muiogoai defaults to 5102, checkouts the user runs
 manually keep MUIOGO's own 5002 — so a command can never silently drive the
-wrong server. And MUIOGO solves synchronously: one solve occupies the server,
-so do not fire runs in parallel against a single server; use `muiogo-ai batch`.
+wrong server. And a single `muiogo-ai run` occupies the server until it
+finishes, so do not fire runs in parallel yourself; for several runs use
+`muiogo-ai batch`, which solves them side by side on the server.
 
 ## Solvers
 
@@ -87,9 +88,14 @@ it — that is an approval gate, not a formality.
 muiogo-ai batch --case "CLEWs Demo" --runs REF,CO2TAX,RETRG
 ```
 
-The batch endpoint generates input and solves each run server-side with CBC, and
-reports total elapsed time. It is the right tool for a scenario matrix. Verify
-afterwards — a batch reports overall status, so check each run individually:
+The batch endpoint generates the solver input and solves the runs server-side
+with CBC, several at a time: as many as the machine's cores and memory allow
+(`MUIOGO_BATCH_WORKERS` in the server's environment overrides the rule; `1`
+solves one after another). The solver input is rebuilt only when the model or
+its data changed since the last run — the log says `reused` or `rebuilt` — which
+saves a minute or more per run on a country model. The command reports total
+elapsed time. It is the right tool for a scenario matrix. Verify afterwards — a
+batch reports overall status, so check each run individually:
 
 ```bash
 for r in REF CO2TAX RETRG; do

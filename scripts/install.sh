@@ -829,11 +829,11 @@ start_muiogo() {
 start_muiogo
 
 # 5a. install CLEWs country case(s).
-# Preferred: MUIOGO's own /clews install layer (PR #519+) driven by the country
-# repo's clews-country.json — the server downloads, checksum-verifies and imports.
-# Fallback: the original client-side path (download + sha256 here, then
-# /uploadCase), used when the pinned MUIOGO predates /clews or the country repo
-# does not carry a manifest yet.
+# Preferred: MUIOGO's own /clews install layer — the server reads the country
+# repo (its clews-country.json if it has one, otherwise the repo's contents),
+# downloads, checksum-verifies and imports. Fallback: the original client-side
+# path (download + sha256 here, then /uploadCase), used when the pinned MUIOGO
+# predates /clews.
 declare -a CLEWS_INSTALLED_CASES=() CLEWS_INSTALLED_KEYS=()
 HAS_CLEWS_LAYER=0
 if [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://127.0.0.1:${PORT}/clews/getInstalledCountries")" == "200" ]]; then
@@ -903,7 +903,7 @@ for r in data["repos"]:
                 done <<< "$NEWCASES"
                 continue
             }
-            echo "  /clews path unavailable for $ckey (no manifest in the repo yet?) — using the legacy path"
+            echo "  /clews path failed for $ckey — using the legacy path"
         fi
         CMANIFEST="$AI_DIR/clews/countries/$ISO3.json"
         [[ -f "$CMANIFEST" ]] || die "missing CLEWs manifest: $CMANIFEST"

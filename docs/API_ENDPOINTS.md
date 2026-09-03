@@ -101,21 +101,29 @@ The registry's location comes from `MUIOGO_OG_DATA_DIR` (default
 `~/.muiogo/og-models`). A server started without those pointed at the right
 place will not see models registered elsewhere.
 
-## The /clews layer: CLEWs country installs (MUIOGO PR #519+, not yet at the pin)
+## The /clews layer: CLEWs country installs (at the pin since 0838017d)
 
 The CLEWs twin of `/ogc`: where `/ogc` installs code (an OG model repo with its
-own venv), `/clews` installs data — case archives declared in a country repo's
-`clews-country.json` manifest, downloaded and sha256-verified by the server,
-then imported through the same pipeline the GUI's restore uses. Added by
-EAPD-DRB/MUIOGO PR #519; a server at the current pin answers 404 on all of
-these (the client and install.sh degrade to the legacy path).
+own venv), `/clews` installs data — case archives from a country repository,
+downloaded and sha256-verified by the server, then imported through the same
+pipeline the GUI's restore uses (MUIOGO PR #519). The server finds what a
+repository ships by reading the repository itself (PR #542): a folder holding
+a `SHA256SUMS` and MUIO archives is a version, the newest being the most
+recently changed in the repository's history; a repository that carries a
+`clews-country.json` is read from that instead. Remote repositories are read
+through a blobless git clone kept under `~/.muiogo/clews-state/scan-cache/`
+(no GitHub API, no token for public repos); the derived menu is cached for an
+hour. The register of known repositories is MUIOGO's own
+`scripts/clews-repos.json`, read from its main branch by default. The browser
+page for all of this is `#/ClewsInstall` (Home → the download button); the
+client's `muiogo-ai clews …` commands drive the same endpoints.
 
 | Endpoint | Method | Notes |
 |---|---|---|
 | `/getVersion` | GET | `{muio_version, accepted_case_versions}` — check before sending archives |
-| `/clews/getCountryCatalog` | GET | rows under **`countries`**; empty + `catalog_source: "none"` unless a register URL is configured (`MUIOGO_CLEWS_CATALOG_URL`) |
+| `/clews/getCountryCatalog` | GET | rows under **`countries`** from the register (`MUIOGO_CLEWS_CATALOG_URL`, default MUIOGO's `scripts/clews-repos.json` on main; an empty value means no register → `catalog_source: "none"`), each tagged with this machine's install state |
 | `/clews/getInstalledCountries` | GET | rows under **`cases`** — every case with provenance, reconciled against DataStorage on each read; hand-added cases show `managed: false` |
-| `/clews/inspectSource` | POST | `{source_type: repo_url\|local_path, ...}` → the manifest's menu (vintages, cases, collisions, version gate), nothing downloaded |
+| `/clews/inspectSource` | POST | `{source_type: catalog\|repo_url\|local_path, ...}` → the menu (vintages newest first, cases, collisions, version gate), nothing downloaded; `discovered: true` when read from the repository's contents rather than a manifest, `ordering: date\|name\|manifest` |
 | `/clews/installCountry` | POST | same body + optional `vintage`, `cases[]`; **asynchronous job**, checksum mismatch installs nothing, existing cases report `already_exists` |
 | `/clews/getInstallStatus` | GET | `?install_id=` — per-case `results` on completion |
 | `/clews/checkCountryUpdate` | POST | `{casename}` — compares recorded vs published checksum; check-only |
@@ -133,12 +141,18 @@ From `API/Routes/` at the same commit — payloads unverified:
   `/saveCase`, `/saveScOrder`, `/getResultData`, `/resultsExists`,
   `/prepareCSV`, `/downloadCSV`, `/importTemplate`
 - Runs: `/createCaseRun`, `/updateCaseRun`, `/deleteCaseRun`,
-  `/deleteScenarioCaseRuns`, `/batchRun` (CBC hardcoded), `/cleanUp`,
+  `/deleteScenarioCaseRuns`, `/cleanUp`,
   `/validateInputs`, `/readDataFile`, `/readModelFile`, `/readLogFile`,
   `/saveView`, `/updateViews`, `/downloadDataFile`, `/downloadFile`
 - OG-Core (`/ogc/*`): `/getCalibrationCatalog`, `/getInstalledCalibrations`,
   `/checkCalibration`, `/installCalibration`, `/registerLocalCalibration`
 - Upload & S3 sync routes.
 
+`/batchRun` is exercised by `muiogo-ai batch` (CBC only): since MUIOGO
+0838017d it solves the runs in parallel — as many at a time as the machine's
+cores and memory allow, `MUIOGO_BATCH_WORKERS` overrides — and rebuilds the
+solver input only when the model or data changed (the log says `reused` or
+`rebuilt`). Results are byte-identical to sequential solves.
+
 Next to exercise (Phase-1 scenarios work): `/createCaseRun`, `/updateData`,
-`/batchRun`, `/readLogFile`.
+`/readLogFile`.

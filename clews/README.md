@@ -6,11 +6,13 @@ The CLEWs side of country installation, mirroring how OG models solve it.
   (the CLEWs analogue of the OG installer's `repos.json`).
 - `countries/<ISO3>.json` — one manifest per country: its cases (with roles
   and a recommended default), where the archives live, checksums, and its OG
-  counterpart. These are **overlay manifests**: the spec is designed to live
-  inside each CLEWs country repo as `clews-country.json` (self-describing data
-  packages), and is hosted here only until that migration is proposed
-  upstream. When a country repo carries its own manifest, the in-repo copy
-  wins.
+  counterpart. These **overlay manifests** now serve only the installer's
+  legacy path (a pinned MUIOGO older than the `/clews` install layer). A
+  current MUIOGO reads a country repo directly — its `clews-country.json` if
+  it has one, otherwise the repo's contents (a folder with a `SHA256SUMS` and
+  MUIO archives is a version) — so nothing here has to be kept in step with
+  the repos. MUIOGO's own register of repos is `scripts/clews-repos.json` in
+  the MUIOGO repository; the copy here is the legacy path's.
 
 **Matching**: ISO3 is the join key everywhere. The OG installer derives
 `PHL` from `OG-PHL`; a CLEWs manifest declares `iso3: PHL`; the composed
