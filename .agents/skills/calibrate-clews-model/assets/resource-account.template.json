@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "account_id": "NATIONAL_LAND",
+  "unit": "1000 km2",
+  "base_year": "2020",
+  "years": ["2020", "2021"],
+  "total": {"2020": 100.0, "2021": 100.0},
+  "boundary_reconciliation": {
+    "published_total": 100.0,
+    "excluded_total": 0.0,
+    "mapped_source_total": 100.0,
+    "model_control_total": 100.0,
+    "tolerance": 0.000001,
+    "calculation_ids": ["CALC_ACCOUNT_RECONCILIATION"]
+  },
+  "classes": [
+    {
+      "class_id": "PROTECTED",
+      "role": "protected",
+      "base_year_value": 40.0,
+      "lower": {"2020": 40.0, "2021": 40.0},
+      "upper": {"2020": 40.0, "2021": 40.0},
+      "evidence_ids": ["SRC_ACCOUNT_STOCK"]
+    },
+    {
+      "class_id": "FLEXIBLE",
+      "role": "flexible",
+      "base_year_value": 60.0,
+      "lower": {"2020": 60.0, "2021": 0.0},
+      "upper": {"2020": 60.0, "2021": 60.0},
+      "evidence_ids": ["SRC_ACCOUNT_STOCK"]
+    }
+  ],
+  "transitions": [
+    {
+      "transition_id": "PROTECTED_EXPANSION",
+      "claim": "annual_maximum",
+      "implementation": "adjacent_year_net_constraint",
+      "rate": 2.5,
+      "unit": "1000 km2/year",
+      "source_class_ids": ["FLEXIBLE"],
+      "destination_class_ids": ["PROTECTED"],
+      "evidence_ids": ["SRC_TRANSITION_RATE"]
+    }
+  ],
+  "index_scope": {
+    "account_scope": "national",
+    "constraint_scope": "national",
+    "allocation_evidence_ids": []
+  },
+  "export_checks": {
+    "zero_and_sentinel_bounds": {
+      "status": "passed",
+      "artifact": "documentation/generated-bound-check.json"
+    }
+  }
+}

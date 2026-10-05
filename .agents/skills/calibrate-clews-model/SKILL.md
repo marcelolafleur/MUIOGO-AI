@@ -1,263 +1,264 @@
 ---
 name: calibrate-clews-model
-description: "Implement or refine a country calibration in an existing MUIO/OSeMOSYS CLEWs model with equation-first, non-forcing, sourced changes: stocks, lifetimes, demand, costs, efficiencies, historical pins, calibration-induced infeasibility. Not for structural cleanup, dead-object removal, descriptions or technology grouping - use clews-model-fix. To grade instead, assess-clews-calibration."
+description: "Calibrate a solved country CLEWs model when explicitly requested or when localizing a complete sector, closed resource account, or coupled interface package with traceable national evidence. Not for isolated value refreshes or minor calibration fixes—record those in the calibration backlog—nor for initial builds (use build-clews-model) or value-neutral cleanup (use clews-model-fix)."
 ---
 
-# Calibrate a CLEWs model
+# Calibrate a CLEWs country model
 
-Implement calibration as a reproducible model change, not as a search for a
-solver result that resembles history. Read the repository instructions, the
-active local formulation, and the application export code before editing.
+Refine an existing solved country model with defensible evidence and physical
+structure. Calibration here means country localization and physical calibration
+from evidence independent of model-output error; it does not mean tuning inputs
+until outputs resemble history.
 
-## Triage before anything else
+## Boundary
 
-The evidence a change requires scales with what the change can affect — not with the
-importance of the model. Classify first, then take the matching path:
+Require a solved country baseline. Use `build-clews-model` if none exists and
+`clews-model-fix` for edits that cannot change any model value.
 
-| Class | Test | Path |
-|---|---|---|
-| **A — structural** | No parameter value changes and no source data changes | **Stop. Use `clews-model-fix`.** |
-| **B — sourced parameter change** | A number changes, chosen *without* reference to an observed outcome | **The Class B short path below.** No plan. |
-| **C — calibration** | A value chosen *with reference to* an observed outcome | This skill, in full |
+Use this workflow only when the user invokes it explicitly or the work closes a
+complete sector, resource account, or coupled interface. Put isolated value
+updates, citation refreshes, and minor calibration fixes in
+`calibration-backlog.csv` and batch them into the next coherent wave.
 
-The discriminator is the counterfactual test: *would this exact change still be made if no
-historical outcome were known?* Yes → A or B. No → C. Full rules in
-[references/non-forcing.md](references/non-forcing.md).
+Apply the counterfactual test in
+[references/non-forcing.md](references/non-forcing.md):
 
-Deleting a dead technology, fixing a description, or regrouping technologies is Class A. It
-does not need a calibration plan, a control run, an A/B test or a checksum register. Do not
-run the gate below on it.
+> Would this exact change still be made if no historical outcome were known?
 
-## The Class B short path
+Use observations as physical inputs, demand, initial stock, availability,
+documented real-world constraints, or diagnostic benchmarks. Never select a
+parameter merely to reduce historical error; record unresolved mismatches as gaps.
 
-A sourced number that was not chosen by looking at an outcome does **not** need a calibration
-plan, a control solve, or an A/B rollback. It needs six things:
+## Calibration package
 
-1. **Provenance.** A source (or calculation) and assumption record, and a `MODEL_MAP` row —
-   [references/SCHEMA.md](references/SCHEMA.md). This is the point of
-   the exercise, and it is minutes.
-2. **The equation and the units.** Read the local equation that consumes the parameter and
-   confirm the unit and the direction (input/output ratios invert). This is lookup, not
-   computation. It is where a good number gets written into the wrong parameter family.
-3. **A clean diff.** Referential integrity holds and nothing else changed. Work on a
-   disposable case; change source parameters only.
-4. **Family-scoped pre-solve checks.** Run only the gates in step 5 that your parameter
-   family can break — see the scoping table there. A fuel price and an initial stock are both
-   "one number" and warrant very different scrutiny.
-5. **One solve.** Unavoidable and not ceremony: a single number re-optimises the system, so
-   the effect cannot be known without solving.
-6. **Compare against the stored baseline** — not a freshly re-solved one. Objective, runtime,
-   and the activities/capacities the parameter touches.
-
-**Escalate to the full path** — control solve, A/B rollback, the whole gate set — only when
-something moved that should not have, the runtime regresses, the solve is infeasible, or the
-stored baseline turns out to be stale or mismatched. Escalation is a response to evidence,
-not a precondition.
-
-Record the change in `CHANGES.csv` with `class=B`.
-
-## Mandatory design gate
-
-**Class C only.** Class B uses the short path above and never creates a plan; do not run the
-plan validator on a Class B change.
-
-Before the first full solve:
-
-1. Copy `assets/calibration-plan.template.json` into the case documentation
-   and complete it.
-2. Classify every observation as exactly one of:
-   `initial_stock`, `final_demand`, `real_world_constraint`, or
-   `benchmark_only`.
-3. Map every changed parameter to its source JSON file, local formulation
-   equations, generated-data representation, and physical effect.
-4. List explicit technology roles. Never infer physical stock,
-   pass-through, accounting, conversion, or backstop behavior from a name
-   prefix alone.
-5. Register full-precision initialization inputs and their checksums. Do not
-   initialize source parameters from rounded display CSVs when lossless solver
-   or source data exist.
-6. Define the unchanged control, last known-good runtime, candidate time
-   budget, and minimal A/B strategy.
-7. Run:
-
-   ```bash
-   python scripts/validate_calibration_plan.py PLAN.json --stage design
-   ```
-
-Do not run a full optimization while this gate fails.
-
-## Non-forcing rules
-
-[references/non-forcing.md](references/non-forcing.md) is authoritative. Read it before
-introducing any parameter or constraint. Two additions specific to calibration:
-
-- Distinguish stock turnover from utilization. Capacity and lifetime assumptions can limit
-  replacement speed; they do not guarantee smooth dispatch among already available
-  technologies.
-- Keep benchmark-only observations out of source parameters.
-
-Read [references/stock-turnover-patterns.md](references/stock-turnover-patterns.md)
-when stocks, lifetimes, turnover, adoption or free switching are in scope.
-
-## Equation-first workflow
-
-Written for Class C. A Class B change takes the short path above and touches only steps 2,
-4, the always-gates in 5, and a single solve in 6.
-
-### 1. Establish a trustworthy baseline
-
-- Confirm case, run, scenario, horizon, solver status, result timestamp and
-  source identity.
-- Hash the baseline source, generated inputs and full-precision result.
-- Reject stale or mismatched results. Solve a fresh unchanged control when
-  necessary.
-- Record objective, runtime, matrix dimensions and the affected baseline
-  activities, capacities, demands, emissions, balances and backstops.
-
-### 2. Trace the implementation path
-
-- Locate `genData.json`, parameter JSON files, `Parameters.json`,
-  `Variables.json`, the active solver formulation, `UpdateCase`,
-  `DataFile.generateDatafile`, preprocessing and result export.
-- For every proposed parameter, read the exact local equation that consumes
-  it. Do not rely on parameter names or remembered OSeMOSYS behavior.
-- Trace structural edits through `genData.json` and `UpdateCase`. Trace
-  numerical edits from source JSON through generated data and derived sets.
-
-### 3. Design from physical evidence
-
-- Prefer observed stocks, commissioning or age cohorts, sales,
-  registrations, retirements, survival curves, operational lives, service
-  demands and utilization.
-- Where no physical stock maps defensibly, use an effective initial stock only
-  when its derivation preserves timeslice, availability and
-  capacity-to-activity effects and is documented as an assumption.
-- Separate official data, inherited model values, engineering assumptions and
-  numerical safeguards.
-- For each derived value record source IDs, units, geography, reference
-  period, transformation, calculation ID, affected source cell and replacement
-  evidence.
-
-### 4. Implement in source
-
-- Work on a disposable case.
-- Change only source parameter JSON. Make structural changes in
-  `genData.json` and regenerate with `UpdateCase`.
-- Use an atomic generator with source fingerprints, an allowlisted diff,
-  collision checks, invariant assertions and a recoverable backup.
-- Never promote an edit made only to `data.txt`, processed data, an LP or
-  solver output.
-
-### 5. Pass deterministic pre-solve gates
-
-Run the gates your change can actually break. Three always apply — they are cheap and catch
-collateral damage:
-
-- exact referential and scenario-ID integrity;
-- source-diff allowlist and unchanged source hashes;
-- no unintended restrictive `TAL`/`TAU`, exact activity pins, or arbitrary release years.
-
-The rest are scoped by **which constraint block your parameter actually enters**. The table
-below is derived from the upstream formulation
-([`OSeMOSYS_GNU_MathProg/src/osemosys.txt`](https://github.com/OSeMOSYS/OSeMOSYS_GNU_MathProg/blob/master/src/osemosys.txt)),
-not from parameter names. Verify against your **active local formulation** before relying on
-it — step 2 exists for that reason, and MUIO builds do diverge.
-
-| Parameter family | Constraint blocks it enters | Additional gates |
-|---|---|---|
-| `VariableCost`, `FixedCost`, `CapitalCost` | **none** — cost and salvage accounting only (`OC1`, `OC2`, `CC1`, `SV1`–`SV2`) | none. Three always-gates and one solve. Compare the objective. |
-| `EmissionActivityRatio`, `EmissionsPenalty` | `E1` → penalty in the objective (`E3`); **and `E8`/`E9` limits, but only when `AnnualEmissionLimit` or `ModelPeriodEmissionLimit` is set** (both blocks are conditional on `<> -1`) | none if no limit is set. **If a limit is set, an emissions factor can make the model infeasible** — check emissions headroom before solving. |
-| `InputActivityRatio`, `OutputActivityRatio` | commodity balance (`EBa1`–`EBa8`) | commodity-balance replay |
-| `SpecifiedAnnualDemand`, `AccumulatedAnnualDemand` | `EQ_SpecifiedDemand`, `EBa9`, `EBb4` | commodity-balance replay |
-| `ResidualCapacity` | `CAa2_TotalAnnualCapacity` — indexed over **every** year, feeding `CAa4` | **every-year** capacity envelope, not just the initial year |
-| `OperationalLife` | `CAa1_TotalNewCapacity` (vintage accumulation) **and** `SV1`–`SV3` salvage | vintage survival + full-horizon replacement, **and** compare the objective — a lifetime change moves salvage value too |
-| `CapacityFactor`, `AvailabilityFactor`, `CapacityToActivityUnit` | `CAa4_Constraint_Capacity`, `CAb1_PlannedMaintenance` (`CapacityToActivityUnit` also `RM1`) | every-year, every-timeslice capacity/service envelope |
-| Initial/effective stock, turnover, adoption | `CAa1` vintage accumulation | nonnegative, dimensionally consistent stock/vintage profiles + full-horizon survival and replacement |
-| `ReserveMargin` and its tags | `RM1`–`RM3` | reserve-margin check |
-| `TotalAnnualMin/MaxCapacity`, activity limits | `TCC1`/`TCC2`, `NCC1`/`NCC2`, `AAC2`/`AAC3` | covered by the always-gate on pins |
-| New or re-roled technologies, new modes or sets | structural | technology-role coverage, derived-set inspection, `glpsol --check` |
-
-Two consequences worth stating plainly, because both are easy to get wrong:
-
-- **A cost is genuinely cheap.** `VariableCost`, `FixedCost` and `CapitalCost` enter no
-  constraint at all — they only move the objective. Three gates and one solve is right.
-- **An emissions factor is not**, despite looking like a cost. It reaches a hard limit
-  whenever one is set, so the same edit is cheap in a model with no emission cap and
-  potentially infeasibility-inducing in one with a cap.
-
-**Class C only**, once each artifact is recorded in the plan:
+Put a completed copy of `assets/calibration-package.template.json` at
+`CASE_DIR/documentation/calibration-package.json`. Maintain the backlog at
+`CASE_DIR/documentation/calibration-backlog.csv`. All package paths are relative to
+`CASE_DIR`; override inference explicitly with `--case-dir`:
 
 ```bash
-python scripts/validate_calibration_plan.py PLAN.json --stage pre-solve
+python scripts/validate_calibration_package.py \
+  CASE_DIR/documentation/calibration-package.json \
+  --case-dir CASE_DIR --stage design
 ```
 
-Class B has no plan and must not run this.
+The package validator compares the baseline and candidate source JSON directories,
+derives the allowlist from `changes[].source_file`, resolves lineage against the
+six CSV ledgers, verifies
+the inherited ledger and retained evidence against the predecessor, reads JSON
+gate reports, and checks connectivity dispositions. A passed gate needs a JSON
+artifact whose top-level status is `pass`; only the explicitly optional gates may
+be `not_applicable`, with a reason. Do not solve while the design gate fails.
 
-Treat a deterministic failure as a design or data error. Do not ask CBC to
-diagnose it.
+## Workflow
 
-### 6. Solve once, diagnose narrowly
+### 1. Establish the baseline and inventory
 
-- Run CBC through the normal application chain within the plan's time budget — or, for a
-  Class B change with no plan, within twice the last known-good runtime.
-- If presolve reports infeasibility, map the row back to the named local
-  equation, indices, lower/upper values and source parameters before changing
-  anything.
-- If runtime regresses, stop near twice the known-good runtime unless the log
-  shows credible convergence.
-- Compare against the **stored** baseline result first. Only when something moved that
-  should not have — or the baseline proves stale, the runtime regresses, or the solve is
-  infeasible — spend a fresh unchanged control and one minimal A/B rollback. Never run a
-  sequence of speculative formulations.
-- A generated-file edit is permitted only in a disposable, clearly labelled
-  diagnostic. Reproduce an accepted remedy in source and rerun the entire
-  chain.
-- Treat large aggregate constraint families and cross-technology coupling as
-  formulation changes requiring a dedicated matrix-size and runtime A/B.
+Record the source and candidate cases, scenario, horizon, intended use, stored
+baseline identity, solver status, objective, runtime, and model dimensions. Start
+the candidate with a complete copy of the current ledger and retained evidence.
+Classify result surfaces as raw solver output, ordinary generated views, or
+postprocessed reporting. Record each postprocessed layer in `reporting_layers`
+with its publisher, version, raw inputs, published outputs, manifest, and rerun
+requirement. Treat raw solver results as authoritative for optimizer behavior.
 
-### 7. Validate behavior, not just optimality
+Use one complete, high-impact sector and its direct CLEWs interfaces as the
+minimum implicit phase boundary. If the user has not selected the sector,
+prioritize by national importance, current model weakness, cross-sector
+influence, and public data availability. Inspect all material inputs within that
+boundary and classify country specificity, currency, age, proxy use, missingness,
+and connectivity.
+Use the research hierarchy and trace rules in
+[references/country-data-research.md](references/country-data-research.md).
 
-- Compare objective and runtime with the accepted baseline.
-- Check affected activity, capacity, demand, emissions, resource balances,
-  backstops, constraint residuals and duals.
-- Measure adjacent-year capacity and within-class activity-share changes.
-  Report remaining discontinuities; do not hide them with pins.
-- Inspect unexpected differences elsewhere and distinguish physical changes
-  from alternate optima.
-- Verify result freshness, case/run/scenario identity and artifact hashes.
+Define whole-sector completion at the simplest defensible national level:
+demand or service, historical accounting, stocks and turnover, applicable
+technologies, costs and efficiencies, resource or infrastructure constraints,
+direct emissions, and material interfaces with other modeled sectors. Group the
+coupled changes needed to close that sector in one wave. A wave may contain
+multiple packages, but they share one generated candidate, one solve, and one
+set of verification artifacts. Record each package's completion test, evidence
+period and post-evidence treatment, source and allocation boundary, calibration
+claim, and measurable invariants. These declarations add no solve.
 
-### 8. Document and promote
+### 2. Audit connectivity
 
-- Maintain the ledgers in
-  [references/SCHEMA.md](references/SCHEMA.md), including a
-  `CHANGES.csv` row carrying this change's class.
-- Update the case's `MODEL_FIXES*.md` with reason, equations, source changes,
-  before/after values, diagnostics, baseline and exact passed/failed/timed-out
-  checks.
-- Promote only by regenerating the live case from the validated source state.
-- Run one fresh live validation; do not copy disposable generated files or
-  results.
-- **Class C only** — complete the plan's promotion gates and run:
+Start from `assets/connectivity-rules.template.json`. Declare roles and physical
+links explicitly; never infer them from prefixes. Run:
 
-  ```bash
-  python scripts/validate_calibration_plan.py PLAN.json --stage promotion
-  ```
+```bash
+python scripts/audit_clews_connectivity.py CASE_DIR \
+  --rules CASE_DIR/documentation/connectivity-rules.json \
+  --ledger-dir LEDGER_DIR \
+  --output CASE_DIR/documentation/connectivity-audit.json
+```
 
-## Acceptance gate
+The audit fails closed on unknown rule entities and stale exemptions, checks free
+routes year by year, and emits collision-free finding IDs. Resolve every active
+finding by connecting or bounding it, declaring a sourced legitimate role, or
+recording a consequential gap. Follow
+[references/connectivity-audit.md](references/connectivity-audit.md).
 
-**Both classes.** Do not claim completion unless the normal application chain solves
-successfully, no gate that applies to your parameter family was omitted, and every material
-data source, transformation and limitation is traceable through the ledgers. Record the
-change in `CHANGES.csv` with its class.
+When a branch is referenced but demonstrably inactive, use the conditional
+retirement procedure in
+[references/inactive-branch-retirement.md](references/inactive-branch-retirement.md).
+Do not add dummy demand, supply, or disposal solely to silence a warning.
 
-**Class C additionally.** The plan validator must pass at `promotion`. Class B has no plan;
-its equivalent evidence is the provenance records, the family-scoped gate results and the
-baseline comparison.
+### 3. Design the representation
 
-## Related skills
+Read the exact local equation and export path for each changed parameter. Verify
+ratio direction, units, indices, guards, defaults, generated-data behavior, and
+national-versus-cluster scope. Use the fewest objects needed for a defensible
+physical chain, leaving choices endogenous beyond documented constraints.
 
-- `build-clews-model` — build an uncalibrated country model.
-- `assess-clews-calibration` — grade calibration quality and fitness for use.
-- `clews-model-review` — audit structural and referential integrity.
-- `add-environmental-accounting` — add environmental accounts without
-  changing the economic model.
+Use transparent, bounded, and replaceable proxies when national evidence is
+unavailable. Resolve conflicting evidence explicitly. For each material proxy,
+record its central value, plausible range, transfer rationale, model consequence,
+and the national authority or dataset that could replace it. A plausible range
+documents uncertainty; do not run variants, sweeps, or sensitivity analysis to
+select a value. Leave new `ASSUMPTIONS.csv` lower and upper bounds blank in this
+workflow; carry inherited bounds forward unchanged.
+
+For initial stocks, survival, retirement, or adoption, use
+[references/stock-turnover-patterns.md](references/stock-turnover-patterns.md).
+For annual technology entry, project pipelines, commissioning rates, or
+`TotalAnnualMaxCapacityInvestment`, use
+[references/deployment-envelopes.md](references/deployment-envelopes.md).
+For land, water, biomass, fisheries, emissions, or another closed account, use
+[references/resource-accounting.md](references/resource-accounting.md) and run:
+
+```bash
+python scripts/validate_resource_account.py RESOURCE_ACCOUNT.json \
+  --ledger-dir LEDGER_DIR \
+  --json CASE_DIR/documentation/resource-account-validation.json
+```
+
+### 4. Record provenance and implement
+
+Use the six-ledger contract in [references/SCHEMA.md](references/SCHEMA.md).
+Every package evidence ID, map ID, and change ID must resolve. Validate the ledger
+and write its JSON report for the package gate:
+
+```bash
+python scripts/provenance.py LEDGER_DIR --stage build \
+  --model-inputs MODEL_INPUT_DIR \
+  --required-input AFFECTED_INPUT.csv \
+  --allow-inherited-coverage-gaps \
+  --json documentation/provenance.json
+```
+
+Modify source parameter JSON and `genData.json`, then regenerate through
+`UpdateCase` and the normal application chain. Never promote generated-data, LP,
+or solver-output-only edits. The package validator requires the actual changed
+top-level source JSON files to equal `changes[].source_file`.
+Formatting-only JSON churn is ignored. Record deterministic semantic regeneration
+churn in `regeneration_changes` with before/after hashes and a reason; never use
+that list to hide a numerical or structural model change. Record inherited
+source-metadata corrections in `provenance.corrections`; create or supersede a
+ledger record when a numerical claim or lineage changes.
+
+For a source-only handoff before solving, set `delivery.state` to
+`source_input_patch`, update the history artifact, mark existing results `stale`
+or `absent`, and record the command needed to recertify them. Regenerate the live
+source, create its result-free archive, verify live/archive source identity, and
+run the lightweight checkpoint:
+
+```bash
+python scripts/validate_calibration_package.py \
+  CASE_DIR/documentation/calibration-package.json \
+  --case-dir CASE_DIR --stage source-input-patch
+```
+
+This checkpoint certifies the source, provenance, and archive identity only; it
+does not certify a solve or promote the case.
+
+### 5. Pass pre-solve gates
+
+Attach the machine reports named by the package's `gates` keys, resolve every
+active connectivity finding, and run the mandatory non-forcing audit. A deferred
+finding must cite its `GAPS.csv` item; it does not masquerade as evidence.
+
+```bash
+python scripts/audit_no_forcing.py CASE_DIR \
+  --package CASE_DIR/documentation/calibration-package.json \
+  --ledger-dir LEDGER_DIR \
+  --output CASE_DIR/documentation/no-forcing-audit.json
+```
+
+Then run:
+
+```bash
+python scripts/validate_calibration_package.py \
+  CASE_DIR/documentation/calibration-package.json \
+  --case-dir CASE_DIR --stage pre-solve
+```
+
+Treat failures as data or design errors rather than solver diagnostics.
+
+### 6. Solve and diagnose
+
+Solve the complete wave through the normal application chain within the recorded
+budget. All packages, inactive-branch retirements, and invariants ride this same
+solve. Map
+infeasible rows to equations, indices, bounds, and evidence before changing
+anything. Inspect affected quantities, binding limits, resource balances,
+backstops, residuals, adjacent sectors, and full-horizon behavior. Correct only
+mapping, unit, scope, evidence, or formulation defects—not historical mismatch.
+Allow at most three repair re-solves by default. At that point, consolidate the
+diagnosis and park the unresolved package as a documented gap while continuing
+independent work; run more only with explicit user authorization. Never run an
+unchanged control, parameter sweep, scenario ranking, or calibration A/B.
+
+After each retained feasible solve, run every declared postprocessed reporting
+publisher, verify its manifest against the current raw-result hashes and
+allowlisted outputs, and attach the `reporting_layers_current` report. Disclose
+which displayed results depend on postprocessing. This adds publication and hash
+checks, not another solve.
+
+In the central run, inspect the historical-to-future seam, annual technology and
+fuel shares, stock turnover, resource dominance, imports, electricity demand, and
+emissions. Report what the sector can now represent, its historical scale and
+future service path, and which material results remain proxy-driven.
+
+### 7. Compare and promote
+
+Compare core annual outcomes before row-level activity. Add project-specific
+land, water, or resource tables with repeated `--structural` options when needed.
+Use `--rules` to filter exact retired identifiers and aggregate explicitly
+equivalent routes:
+
+```bash
+python scripts/compare_clews_runs.py BASELINE_CSV_DIR CANDIDATE_CSV_DIR \
+  --rules CASE_DIR/documentation/comparison-rules.json \
+  --output CASE_DIR/documentation/run-comparison.json
+```
+
+Investigate tables present on only one side, aggregate equivalent routes, and do
+not mistake alternative-optimum dispatch reallocations for physical change.
+Compare raw solver results for model behavior and refreshed published layers for
+reporting; never compare a stale derived view with a current solver run.
+Record the comparator's exact-parity, alternate-optimum-candidate, or
+material-change classification. An alternate-optimum candidate requires an
+explicit promotion acceptance with rationale and the comparison artifact.
+Benchmarks remain diagnostic, never fitted.
+
+Regenerate the live case from validated source and verify its source hash. Reuse
+the successful wave solve when its recorded source hash is identical; otherwise
+solve once fresh. Create the result-free archive, verify live/archive source
+identity, run provenance at `--stage delivery`, set `delivery.state` to `promoted` and
+`delivery.result_status` to `fresh`, and finish with:
+
+```bash
+python scripts/validate_calibration_package.py \
+  CASE_DIR/documentation/calibration-package.json \
+  --case-dir CASE_DIR --stage promotion
+```
+
+## Judgment at delivery
+
+The scripts cannot decide whether evidence is substantively appropriate. Confirm
+that each change passes the counterfactual test, physical roles and scopes are
+defensible, no material free or disconnected route remains unexplained, and
+limitations name the evidence needed to replace proxies. Solver success proves
+technical validity only; use `assess-clews-calibration` to grade calibration and
+fitness for purpose.

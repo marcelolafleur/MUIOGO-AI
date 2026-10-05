@@ -76,6 +76,32 @@ Two things to say afterwards, because they bite later:
 For a country not in the catalogue, `--repo-url` (with optional `--branch`)
 installs from a git URL.
 
+### Updating an installed model
+
+"Check for updates" on MUIOGO's OG-Core page (the refresh icon on the card, or
+`refreshCalibration` with `check_only: true`) only reports. It cannot apply the
+update: every model the installer set up is registered from a local folder, and
+MUIOGO refuses to pull over local folders. The card says "update the local
+folder to get this version" and nothing more, so users get stuck here.
+
+The supported way is the installer's update mode, run with the server stopped,
+from the `MUIOGO-AI` checkout that installed this world:
+
+```bash
+muiogo-ai stop && ./scripts/install.sh --update
+```
+
+It fast-forwards each installed model, re-syncs its venv with the same flags
+MUIOGO's installer uses (`uv sync --extra dev`), and re-registers it so the
+registry's commit hash is current. It skips a clone with uncommitted changes or
+no tracking branch, since that is someone's development copy. Say what version
+it moved from and to, and remind the user to start the server again.
+
+Do not tell users to `git pull` and `uv sync` by hand: a plain `uv sync` strips
+the dev tools, and "Check again" afterwards leaves the registry's commit hash
+stale (see `docs/API_ENDPOINTS.md`). This is an installer job until MUIOGO
+offers the Update button for installer-managed models.
+
 ## Importing a CLEWs case
 
 To bring in a MUIO case archive — your own country model, a colleague's, or one
@@ -90,6 +116,22 @@ This uses the same validated path as the web interface's restore, so version
 checks and post-import fixups all apply. The command reports the case name that
 appeared, and fails loudly if none did — never assume an import worked because
 the command returned.
+
+When the MUIOGO behind the setup includes the `/clews` install layer
+(EAPD-DRB/MUIOGO PR #519 or newer — not yet at the current pin), prefer
+installing a country straight from its repository instead of handling zips:
+
+```bash
+muiogo-ai clews inspect --repo-url https://github.com/EAPD-DRB/CLEWs-PHL
+muiogo-ai clews install --repo-url https://github.com/EAPD-DRB/CLEWs-PHL
+```
+
+The server reads the repo's `clews-country.json`, downloads the recommended
+case archive, verifies it against the repo's published checksums (a mismatch
+installs nothing), and imports it — recording provenance you can later check
+with `muiogo-ai clews installed` and `muiogo-ai clews update-check`. If the
+command reports the server has no `/clews` layer, or the repo carries no
+manifest yet, fall back to the zip import above.
 
 Then confirm and check it before trusting it:
 

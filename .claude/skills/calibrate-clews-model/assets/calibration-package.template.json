@@ -1,0 +1,136 @@
+{
+  "schema_version": 3,
+  "case": {
+    "source_case": "COUNTRY_BASIC",
+    "candidate_case": "COUNTRY_REFINED_WORKING",
+    "baseline_run": "BASE_STORED",
+    "source_json_dir": "../COUNTRY_BASIC",
+    "candidate_json_dir": ".",
+    "scenario": "BASE",
+    "horizon": "2020-2050",
+    "intended_use": "National CLEWs scenario analysis"
+  },
+  "provenance": {
+    "inherited_ledger_dir": "data_sources",
+    "predecessor_ledger_dir": "../COUNTRY_BASIC/data_sources",
+    "retained_evidence_dir": "data_sources/evidence",
+    "corrections": [],
+    "inherited_coverage_gaps": []
+  },
+  "backlog": {
+    "path": "documentation/calibration-backlog.csv",
+    "prioritization_basis": "Feasibility risk, decision influence, cross-sector importance, defect severity, and evidence availability"
+  },
+  "packages": [
+    {
+      "package_id": "PKG_EXISTING_STOCK",
+      "name": "Existing generation stock and retirement",
+      "current_weakness": "Generic residual capacity and lifetime assumptions",
+      "objective": "Replace generic stocks with a sourced national plant inventory",
+      "coherence_basis": "One independently testable national generation-stock accounting boundary",
+      "completion_test": "Installed capacity and surviving stock reconcile to the documented inventory and retirement rules",
+      "temporal_boundary": {
+        "evidence_period": "2020-2024",
+        "latest_evidence_year": 2024,
+        "post_evidence_treatment": "Apply documented retirement rules to the latest observed stock"
+      },
+      "evidence_boundary": {
+        "geography": "National",
+        "quantity": "Installed grid-connected generating capacity by plant and technology",
+        "allocation_rule": "Map each registered unit once to its model technology and commissioning year",
+        "quality_status": "Primary national plant register reconciled against published generation statistics"
+      },
+      "claim_scope": "Physical stock accounting using observed capacity as an exogenous historical boundary",
+      "invariants": [
+        {
+          "name": "Unchanged demand sectors remain stable",
+          "metric": "Annual final-energy demand outside electricity supply",
+          "acceptance_rule": "No change beyond numerical solver tolerance"
+        }
+      ],
+      "affected_sectors": [
+        "energy"
+      ],
+      "connectivity_finding_ids": []
+    }
+  ],
+  "changes": [
+    {
+      "change_id": "CHG_EXISTING_STOCK",
+      "change_type": "parameter_update",
+      "package_id": "PKG_EXISTING_STOCK",
+      "parameter": "ResidualCapacity",
+      "source_file": "RYT.json",
+      "coordinates": "SC_0; technology; 2020-2050",
+      "local_equations": [
+        "CAa2_TotalAnnualCapacity",
+        "CAa4_Constraint_Capacity"
+      ],
+      "model_unit": "GW",
+      "physical_effect": "Surviving installed generating capacity",
+      "evidence_role": "initial_stock",
+      "counterfactual_reason": "The registered physical stock is required even if no historical generation outcome is inspected",
+      "evidence_ids": [
+        "SRC_COUNTRY_PLANT_REGISTER",
+        "CALC_EXISTING_STOCK_SURVIVAL"
+      ],
+      "model_map_ids": [
+        "MAP_EXISTING_STOCK"
+      ],
+      "benchmark_source_exceptions": []
+    }
+  ],
+  "benchmarks": [
+    {
+      "name": "Historical electricity generation",
+      "source_ids": [
+        "SRC_COUNTRY_GENERATION"
+      ],
+      "diagnostic_only": true
+    }
+  ],
+  "connectivity": {
+    "rules": "documentation/connectivity-rules.json",
+    "finding_dispositions": []
+  },
+  "non_forcing": {
+    "candidate_dispositions": []
+  },
+  "regeneration_changes": [],
+  "reporting_layers": [],
+  "runtime": {
+    "wave_id": "WAVE_ENERGY_01",
+    "known_good_seconds": 120,
+    "candidate_budget_seconds": 360,
+    "baseline_artifact": "res/BASE_STORED/results.txt",
+    "repair_solve_limit": 3,
+    "repair_solves_used": 0,
+    "additional_solve_authorization": null
+  },
+  "delivery": {
+    "state": "working",
+    "history_artifact": "documentation/HISTORY.md",
+    "result_status": "absent",
+    "recertification_command": "Run the normal application solve, then validate this package with --stage promotion",
+    "alternate_optimum_decision": {
+      "accepted": false,
+      "rationale": null,
+      "comparison_artifact": null
+    }
+  },
+  "gates": {
+    "identifier_integrity": {"status": "pending", "artifact": null},
+    "connectivity_review": {"status": "pending", "artifact": null},
+    "equation_unit_replay": {"status": "pending", "artifact": null},
+    "generated_data_inspection": {"status": "pending", "artifact": null},
+    "stock_resource_account_checks": {"status": "pending", "artifact": null},
+    "matrix_check": {"status": "pending", "artifact": null},
+    "schema_ledger_validation": {"status": "pending", "artifact": null},
+    "no_forcing_audit": {"status": "pending", "artifact": null},
+    "solver_run": {"status": "pending", "artifact": null},
+    "baseline_comparison": {"status": "pending", "artifact": null},
+    "reporting_layers_current": {"status": "not_applicable", "artifact": null, "reason": "No postprocessed reporting layers are declared"},
+    "live_regeneration": {"status": "pending", "artifact": null},
+    "result_free_archive_identity": {"status": "pending", "artifact": null}
+  }
+}

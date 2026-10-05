@@ -1,4 +1,4 @@
 interface:
   display_name: "Calibrate CLEWs Model"
-  short_description: "Calibrate CLEWs models with equation-first gates"
-  default_prompt: "Use $calibrate-clews-model to recalibrate this MUIO/OSeMOSYS CLEWs case without forcing historical activity."
+  short_description: "Calibrate a complete CLEWs sector from evidence"
+  default_prompt: "Use $calibrate-clews-model to calibrate a complete country sector from sourced evidence, with bounded solves, full lineage, and no historical fitting."

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "scenario": "SC_0",
+  "unbounded_threshold": 99990,
+  "technology_roles": {
+    "TEC_EXAMPLE_IMPORT": {
+      "role": "resource_supply",
+      "basis": "Imports introduce a priced primary commodity"
+    }
+  },
+  "terminal_commodity_ids": [],
+  "exogenous_commodity_ids": [],
+  "required_links": [
+    {
+      "rule_id": "IRRIGATED_CROP_REQUIRES_WATER",
+      "technology_ids": [
+        "TEC_EXAMPLE_IRRIGATED_CROP"
+      ],
+      "required_input_commodity_ids": [
+        "COM_EXAMPLE_LAND",
+        "COM_EXAMPLE_WATER"
+      ],
+      "require_all": true,
+      "reason": "Irrigated crop activity must consume land and irrigation water"
+    }
+  ],
+  "reviewed_exemptions": [
+    {
+      "finding_id": "inputless_output_mode:TEC_EXAMPLE_IMPORT:1",
+      "reason": "Declared import/resource-supply boundary with a finite price",
+      "evidence_ids": [
+        "SRC_EXAMPLE_IMPORT_PRICE"
+      ]
+    }
+  ]
+}

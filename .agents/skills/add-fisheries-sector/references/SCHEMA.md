@@ -12,6 +12,13 @@ Six CSV tables, one validator. Every CLEWs skill points here; none redefines the
 `MODEL_MAP` row carries at least one evidence ID; every referenced ID resolves; every retained
 evidence file matches its `sha256`.
 
+**The version-inheritance invariant:** begin every new model version with a complete copy of the
+current canonical ledger and all retained evidence. Carry unchanged records forward, add new
+records, and supersede changed mappings without deleting their lineage. A previous-version name
+may document chronology, but the new version must be independently interpretable and must never
+depend on an earlier package or installed case to supply its sources, calculations, assumptions,
+mappings, gaps, or evidence files.
+
 Worked examples live in `templates/`. Validate with:
 
 ```
@@ -104,7 +111,7 @@ their lineage — never delete a row — but they no longer provide input covera
 |---|---|
 | `change_id` | `CHG_…` |
 | `date` | ISO `YYYY-MM-DD` |
-| `class` | `A` structural cleanup, `B` sourced parameter change, `C` calibration |
+| `class` | Administrative chronology: `A` structural cleanup, `B` evidence-based parameter/model refinement, `C` outcome-referenced calibration record |
 | `description`, `model_objects` | what changed and to what |
 | `evidence_path` | the artifact proving the change was sound; **required for class A** |
 | `map_rows_affected` | `MAP_` IDs |
@@ -114,6 +121,10 @@ their lineage — never delete a row — but they no longer provide input covera
 A class A change asserts no model value moved, so it may not touch a live mapping: every
 `MAP_` row it names must already carry `superseded_by`. That is what makes the fast path
 auditable rather than merely fast.
+
+The class is metadata, not a workflow router or an evidence waiver. It must not downgrade a
+coupled evidence-based country refinement to a token check, and it never authorizes fitting a
+parameter to an observed outcome contrary to the non-forcing rule.
 
 ## What this validator deliberately does not do
 

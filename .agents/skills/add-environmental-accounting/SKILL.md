@@ -9,18 +9,15 @@ Add a transparent accounting layer without changing the modeled economy or silen
 
 ## Triage before anything else
 
-The evidence a change requires scales with what the change can affect. This skill is for
-**adding or validating an accounting layer**. If the request is smaller, take the smaller path:
+Use this skill when the environmental layer reports or balances physical flows without
+refining the economic model. Use `calibrate-clews-model` when the work instead replaces
+generic country inputs, closes a resource account, or repairs a physical cross-sector
+connection. Use `clews-model-fix` for value-neutral structural cleanup.
 
-| Class | Test | Path |
-|---|---|---|
-| **A — structural** | No parameter value changes and no source data changes (removing an unreferenced commodity, fixing a description, regrouping technologies) | **Stop. Use `clews-model-fix`.** |
-| **B — accounting layer** | New terminals, ratios or constraints, from documented sources | This skill |
-| **C — calibration** | A value chosen *with reference to* an observed outcome | `calibrate-clews-model` |
-
-The discriminator is the counterfactual test in
-[references/non-forcing.md](references/non-forcing.md): *would this exact change still be
-made if no historical outcome were known?*
+Apply the discriminator in [references/non-forcing.md](references/non-forcing.md): *would
+this exact change still be made if no historical outcome were known?* If not, reject the
+change and record the mismatch as a diagnostic gap; neither this skill nor calibration may
+fit the parameter to the observed outcome.
 
 ## Non-negotiable rules
 

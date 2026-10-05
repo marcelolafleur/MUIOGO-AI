@@ -16,6 +16,7 @@ Usage:
     python verify.py --repo ../CLEWs-PHL --case Philippines_v16 --archive path/to.zip
     python verify.py --repo ... --case ... --staged        # also gate the commit
     python verify.py --repo ... --case ... --allow docs/HISTORY.md
+    python verify.py --repo ... --case ... --max-fetch-age 0   # offline, refs stale
     python verify.py --repo ... --case ... --json report.json
 
 Exit status:
@@ -23,12 +24,14 @@ Exit status:
     1   at least one check FAILED; stop and read it
     2   the request was unusable (bad path, no archive, ambiguous archive)
 
-This does not fetch. Upstream comparison uses the refs already in the repo, so
-run `git fetch` first or treat the branch check as advisory — it says so in its
-own output rather than guessing.
+This does not fetch: a verifier that mutates the repository it is judging
+cannot be run safely at any moment. Upstream comparison therefore uses the refs
+already in the repo, and the run fails if they are older than --max-fetch-age
+(default 15 minutes, 0 to disable) rather than quietly comparing against a
+week-old picture of the remote. Run `git fetch` first.
 """
 from __future__ import annotations
-import argparse, hashlib, json, os, re, subprocess, sys, zipfile
+import argparse, hashlib, json, os, re, subprocess, sys, time, zipfile, zlib
 
 # Content that must never travel in a handoff archive. Solver output is the one
 # that matters most: it looks valid to whoever unzips it, and it came from a
@@ -134,6 +137,79 @@ def find_archive(repo, case):
 
 # ── the checks ────────────────────────────────────────────────────────────────
 
+def _seconds_since_upstream_update(repo):
+    """How stale the remote-tracking ref is. None if it has never been synced.
+
+    Two sources, because neither alone is right. The ref's own reflog records
+    every time it moved — including by push, which updates origin/main without
+    going near FETCH_HEAD, so a repository that has just pushed is current
+    even though its last fetch was yesterday. FETCH_HEAD's mtime covers the
+    opposite case: a fetch that found nothing new writes FETCH_HEAD but leaves
+    no reflog entry, and that repository is current too.
+
+    Taking the more recent of the two is the only answer that is right in both
+    directions. Reading them costs nothing and, unlike fetching, does not
+    change the repository being judged.
+    """
+    stamps = []
+
+    code, ref = git(repo, "rev-parse", "--symbolic-full-name", "@{u}")
+    if code == 0 and ref:
+        code, out = git(repo, "reflog", "show", "--format=%ct", "-1", ref)
+        if code == 0 and out:
+            try:
+                stamps.append(int(out.splitlines()[0]))
+            except (ValueError, IndexError):
+                pass
+
+    code, gitdir = git(repo, "rev-parse", "--git-dir")
+    if code == 0 and gitdir:
+        if not os.path.isabs(gitdir):
+            gitdir = os.path.join(repo, gitdir)
+        try:
+            stamps.append(os.path.getmtime(os.path.join(gitdir, "FETCH_HEAD")))
+        except OSError:
+            pass
+
+    if not stamps:
+        return None
+    return max(0.0, time.time() - max(stamps))
+
+
+def _describe_age(seconds):
+    if seconds < 90:
+        return "{:.0f} seconds ago".format(seconds)
+    if seconds < 5400:
+        return "{:.0f} minutes ago".format(seconds / 60.0)
+    if seconds < 172800:
+        return "{:.1f} hours ago".format(seconds / 3600.0)
+    return "{:.1f} days ago".format(seconds / 86400.0)
+
+
+def check_fetch_freshness(rep, repo, max_age):
+    """The upstream comparison is only as good as the refs behind it.
+
+    This script never fetches — a verifier that mutates the repository it is
+    judging can no longer be run safely at any moment. So it reports how stale
+    the comparison is instead, and fails when the answer is old enough that
+    'not behind upstream' has stopped meaning anything.
+    """
+    label = "upstream refs are fresh"
+    if max_age <= 0:
+        return
+    age = _seconds_since_upstream_update(repo)
+    if age is None:
+        rep.fail(label, "no fetch or push recorded in this clone — "
+                        "the upstream comparison is against nothing; run git fetch")
+        return
+    if age > max_age:
+        rep.fail(label, "upstream last synced {} — run git fetch, "
+                        "or pass --max-fetch-age 0 if you mean to skip this"
+                 .format(_describe_age(age)))
+    else:
+        rep.ok(label, "upstream synced " + _describe_age(age))
+
+
 def check_repo_state(rep, repo):
     code, _ = git(repo, "rev-parse", "--git-dir")
     if code != 0:
@@ -164,7 +240,12 @@ def check_repo_state(rep, repo):
 
 
 def check_case_ignored(rep, repo):
-    code, _ = git(repo, "check-ignore", "-q", "case")
+    # Ask about "case/", with the slash. The usual rule is "/case/", which is
+    # directory-only, and git can only match it against a query that says it is
+    # a directory or against a path that already exists on disk. Asking for
+    # bare "case" reports "not ignored" in a fresh clone, where the answer
+    # matters most.
+    code, _ = git(repo, "check-ignore", "-q", "case/")
     if code == 0:
         rep.ok("case/ is gitignored", "the live case stays out of history")
     else:
@@ -270,12 +351,41 @@ def check_archive(rep, archive, case):
             else:
                 rep.fail("contains " + rel, "missing " + want)
 
-        bad = zf.testzip()
-        if bad is None:
-            rep.ok("archive integrity (CRC of every entry)",
-                   "{} entries".format(len(names)))
+        # Read the identity out of the ZIP, not just the live directory. The
+        # two agree whenever the archive was built from the case standing next
+        # to it — which is exactly the assumption a stale or mis-built archive
+        # breaks, and the only situation where this check earns its keep.
+        gen = "{}/genData.json".format(case)
+        label = "archive's own osy-casename matches the case"
+        if gen not in present:
+            rep.fail(label, "no " + gen + " to read")
         else:
-            rep.fail("archive integrity (CRC of every entry)", "corrupt entry: " + bad)
+            try:
+                declared = json.loads(zf.read(gen).decode("utf-8")).get("osy-casename")
+            except (KeyError, ValueError, UnicodeDecodeError) as exc:
+                rep.fail(label, "unreadable {}: {}".format(gen, exc))
+            else:
+                if declared != case:
+                    rep.fail(label, "archive's model calls itself {!r}, case is {!r}".format(
+                        declared, case))
+                else:
+                    rep.ok(label, declared)
+
+        # testzip() names the first entry whose CRC is wrong, but only for
+        # damage mild enough that the entry still decompresses. Heavier
+        # corruption raises out of zlib instead, and an uncaught exception here
+        # would end the run in a stack trace rather than a failed check.
+        try:
+            bad = zf.testzip()
+        except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as exc:
+            rep.fail("archive integrity (CRC of every entry)",
+                     "{}: {}".format(type(exc).__name__, exc))
+        else:
+            if bad is None:
+                rep.ok("archive integrity (CRC of every entry)",
+                       "{} entries".format(len(names)))
+            else:
+                rep.fail("archive integrity (CRC of every entry)", "corrupt entry: " + bad)
 
 
 SHA256_RE = re.compile(r"\b[0-9a-fA-F]{64}\b")
@@ -429,6 +539,9 @@ def main(argv=None):
     ap.add_argument("--staged", action="store_true", help="also gate what is staged for commit")
     ap.add_argument("--allow", action="append", metavar="PATH",
                     help="additional repo-relative path allowed in the commit (repeatable)")
+    ap.add_argument("--max-fetch-age", type=int, default=900, metavar="SECONDS",
+                    dest="max_fetch_age",
+                    help="fail if the refs are older than this (default 900; 0 disables)")
     ap.add_argument("--json", metavar="PATH", dest="json_path", help="write the report here too")
     args = ap.parse_args(argv)
 
@@ -458,6 +571,7 @@ def main(argv=None):
 
     rep = Report()
     check_repo_state(rep, repo)
+    check_fetch_freshness(rep, repo, args.max_fetch_age)
     check_case_ignored(rep, repo)
     live = check_case_and_link(rep, repo, args.case, datastorage)
     check_case_identity(rep, live, args.case)

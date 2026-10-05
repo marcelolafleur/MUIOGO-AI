@@ -1,0 +1,4 @@
+item_id,sector,model_object,current_value_or_behavior,evidence_quality,physical_or_decision_risk,priority,research_target,status,notes
+CAL-001,energy,ResidualCapacity,Generic CLEWs Global stock,global_default,Investment and retirement path,high,National plant register and commissioning years,pending,
+CAL-002,land,National land account,Land may disappear or enter an unrestricted residual,disconnected_implausible,Cross-sector land competition,high,Official land accounts and land-cover map,pending,
+CAL-003,water,Water supply route,Potential unlimited or disconnected supply,missing,Resource feasibility,high,National renewable water and withdrawal statistics,pending,

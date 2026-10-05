@@ -80,8 +80,8 @@ Add or adjust checks by editing this file and `audit.py`. When you learn a new d
 
 ## Related skills
 
-- `calibrate-clews-model` — implementing an equation-led, non-forcing
-  calibration change.
+- `calibrate-clews-model` — replacing generic country inputs and repairing physical
+  connections with complete provenance.
 - `assess-clews-calibration` — whether the model is calibrated well enough for a question.
 - `muiogo-provision` — MUIOGO's ten input-consistency checks, before a long solve.
 - `muiogo-run` — solving a case; `muiogo-analyze` — comparing and charting the results.

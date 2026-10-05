@@ -68,7 +68,7 @@ any folder from `.agents/skills/` into your assistant's skills directory
 |---|---|
 | `build-clews-model` | Builds a whole-country CLEWs model from scratch with the upstream CLEWs Global workflow, then imports it into MUIO as a solved, portable case. |
 | `assess-clews-calibration` | Judges how well a model is calibrated to its country, grades it, and says what to fix first. |
-| `calibrate-clews-model` | Implements the calibration: stocks, lifetimes, demand, costs, efficiencies, and historical pins, changed equation-first and against sources. |
+| `calibrate-clews-model` | Calibrates a solved model against national evidence — when asked, or when localizing a whole sector or resource account. Small value fixes go to the calibration backlog instead. |
 | `clews-model-review` | Checks a model's structure and data consistency against a reference model — orphaned IDs, unit slips, missing sectors. |
 | `clews-model-fix` | Makes structural repairs that cannot move a solved number — unreferenced objects, placeholder descriptions, technology groups. |
 | `add-fisheries-sector` | Adds a complete, source-traceable fisheries sector to a solved model without distorting existing results. |
@@ -126,7 +126,7 @@ Canonical homes differ, so update in the right place — and both repos are
 ours, so a shared skill gets fixed at its source rather than patched here.
 
 **Canonical in [Model-tools](https://github.com/EAPD-DRB/Model-tools)**, mirrored
-here byte-identically (edit there, then re-copy): the seven CLEWs skills
+here (edit there, then re-copy; the OG copies add a "Which world" section): the seven CLEWs skills
 (`build-clews-model`, `assess-clews-calibration`, `calibrate-clews-model`,
 `clews-model-review`, `clews-model-fix`, `add-fisheries-sector`,
 `add-environmental-accounting`), the three

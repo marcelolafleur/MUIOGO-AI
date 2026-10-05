@@ -34,22 +34,27 @@ hand, and it never gets bored on the eleventh check.
    `SHA256SUMS` beside the archive, sometimes another at the package root with
    repo-relative paths, and the `README.md` a recipient actually reads. Step 3
    finds them all — if it names a file you did not update, update it.
-3. **Verify.** `verify.py` ships in this skill's directory:
+3. **Verify.** Fetch first — `verify.py` never fetches, because a verifier
+   that mutates the repository it is judging cannot be run freely, so its
+   upstream comparison is only as good as your refs. Run this for **each**
+   country repository you are updating:
 
    ```bash
+   git -C <country-repository> fetch
    python .claude/skills/push-handoff/verify.py --repo <country-repository> --case <case-name>
    ```
 
-   It checks the branch and upstream, that the live case is gitignored and
-   present, that the MUIOGO DataStorage entry is a symlink resolving to that
-   exact case, that `osy-casename` agrees with the folder name, that the
-   archive holds one correctly-named top-level folder with no excluded results
-   and an intact CRC, and that every recorded copy of the hash — in any
-   checksum file or README anywhere in the repository — describes *this*
-   archive. Add
+   It checks the branch and upstream (and fails if the refs are more than 15
+   minutes old), that the live case is gitignored and present, that the MUIOGO
+   DataStorage entry is a symlink resolving to that exact case, that
+   `osy-casename` agrees with the folder name **both in the live case and
+   inside the archive**, that the archive holds one correctly-named top-level
+   folder with no excluded results and an intact CRC, and that every recorded
+   copy of the hash — in any checksum file or README anywhere in the
+   repository — describes *this* archive. Add
    `--archive` when the path is ambiguous, `--datastorage` when MUIOGO is not
-   a sibling. **Exit 1 or 2 stops the handoff.** Report what failed; do not
-   work around it.
+   a sibling, `--max-fetch-age 0` only when genuinely offline. **Exit 1 or 2
+   stops the handoff.** Report what failed; do not work around it.
 4. **Judgment — review and commit.** Read the diff yourself. Stage only the
    intended country-model files and archive, preserving unrelated local work,
    then re-run with `--staged` to confirm nothing else rode along:

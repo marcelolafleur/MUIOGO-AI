@@ -13,15 +13,11 @@ If the change is not in scope below, stop and hand off. Do not widen this skill.
 
 ## Triage first
 
-| Class | Test | Skill |
-|---|---|---|
-| **A — structural** | No parameter value changes and no source data changes | **this skill** |
-| **B — sourced parameter change** | A number changes, chosen *without* reference to an observed outcome | `calibrate-clews-model`, with provenance |
-| **C — calibration** | A value chosen *with reference to* an observed outcome | `calibrate-clews-model`, full plan |
-
-The discriminator is the counterfactual test: *would this exact change still be made if no
-historical outcome were known?* For a Class A fix the answer is trivially yes. Full rules in
-[references/non-forcing.md](references/non-forcing.md).
+Use this skill only when no parameter value or source data changes. Route any evidence-based
+country-data or physical-model refinement to `calibrate-clews-model`. Reject any value chosen
+merely to reproduce an observed outcome under
+[references/non-forcing.md](references/non-forcing.md); do not route outcome fitting to a
+heavier calibration plan.
 
 ## In scope
 
@@ -35,11 +31,14 @@ historical outcome were known?* For a Class A fix the answer is trivially yes. F
 
 ## Out of scope — stop and say which skill applies
 
-- **Any change to a numeric parameter value** → Class B.
-- **Deleting an object that is still referenced** → the solution changes. Class B/C.
-- **A unit correction that implies a conversion** → that is a calculation. Class B.
-- **Anything chosen by looking at a historical outcome** → Class C.
-- A description that encodes a modelling claim rather than a label → treat as Class B.
+- **Any evidence-based change to a numeric parameter value** → `calibrate-clews-model`.
+- **Deleting an object that is still referenced** → the solution can change; use
+  `calibrate-clews-model` or the relevant sector skill.
+- **A unit correction that implies a conversion** → `calibrate-clews-model`; it requires a
+  calculation and provenance.
+- **Anything chosen merely to reproduce an observed outcome** → reject and record a gap.
+- A description that encodes a modelling claim rather than a label → treat as a sourced
+  model refinement.
 
 ## Procedure
 
@@ -102,5 +101,5 @@ gap — there is no lineage to record, because no data entered the model.
 ## Related
 
 - `clews-model-review` — find what needs fixing (`audit.py` without `--removable`).
-- `calibrate-clews-model` — Class B and C changes.
+- `calibrate-clews-model` — evidence-based country-data and physical-model refinements.
 - `assess-clews-calibration` — grade a calibration.

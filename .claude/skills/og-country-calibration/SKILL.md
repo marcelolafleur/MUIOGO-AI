@@ -64,6 +64,16 @@ model can exist in both at different commits. Locate the checkout you mean with
    (single-industry: `alpha_c=[1.0]`, `io_matrix=[[1.0]]`; empty for multi-industry) — `macro_params`
    and `demographic_params` are `{}` and `e` is `None`. A curated few parameters refresh only when a
    caller passes `update_from_api=True`. **[family]**
+1b. **Anything you do not set stays AMERICAN — count what your `Calibration` actually delivers.**
+   The highest-value question to ask of any port. OG-JPN delivered seven parameters; thirty-four
+   mattered. The US defaults that bite hardest, and that no repo reliably overrides:
+   `delta_annual` 0.05 · `beta_annual` 0.96 · `mean_income_data` **in US dollars** (it scales `factor`,
+   so every tax function and the pension formula are evaluated at US income levels) · `pension_system`
+   US Social Security · **`alpha_db` 0.0** (switching to Defined Benefits without it pays zero
+   pensions) · `tax_func_type` `DEP` (US microdata) · `cit_rate` 0.21 (US federal) · `p_wealth` 0.0 ·
+   `initial_foreign_debt_ratio`/`zeta_D` 0.4 · `debt_ratio_ss` 2.0 · the `initial_guess_*` trio.
+   This is the concrete argument for the packaged JSON: it makes the whole surface visible at a glance,
+   where a handful of Python functions makes everything unset invisible. **[net-new: JPN]**
 2. **Most parameters are weakly identified alone.** The real test of a calibration is whether the
    **joint steady state** resembles the country's economy — validate the SS against a dashboard of
    data moments, not each parameter in isolation. **Lead that dashboard with fiscal data — it is the
@@ -71,8 +81,8 @@ model can exist in both at different commits. Locate the checkout you mean with
    debt ratio, its foreign share, and the effective real rate on debt are (a) **published precisely**
    by the treasury / revenue service / IMF, to the currency unit; (b) **convention-free** — they map
    one-to-one onto model ratios, unlike GDP / wage / consumption *levels* (arbitrary model units,
-   need `factor`), sector *nominal* output shares (numeraire-distorted, never comparable), or `r` /
-   K_f/K (open-economy modeling latitude); and (c) **self-checking** via the government budget
+   need `factor`), sector *nominal* output shares (numeraire-distorted, never comparable), or `r`
+   (genuine modelling latitude); and (c) **self-checking** via the government budget
    identity (see Fiscal consistency), so a miscalibration surfaces as an inconsistency in the SS and
    as an outright debt runaway on the transition. So a calibration that nails its fiscal ratios is
    validated on its most trustworthy *and* most stability-critical dimension. `factor` itself is a
@@ -80,6 +90,14 @@ model can exist in both at different commits. Locate the checkout you mean with
    `factor` gap is a mis-collected-tax error, not a cosmetic one. Treat the production / preference /
    earnings moments (sector VA shares, hours, the Gini) as a necessary second tier that fiscal data
    can't speak to. **[emerging: IDN, ETH; the fiscal-first framing net-new: ZAF]**
+2b. **`K_f/K` is a FIRST-tier moment: published, and a lever on `K/Y`.** It is on the dashboard
+   list under Validation, yet the mental-model paragraph above once grouped it with `r` as
+   "open-economy modelling latitude". **That contradiction is the actual defect** — the skill said
+   both, so neither instruction bound, and JPN shipped `zeta_K` as a placeholder for fourteen tuning
+   rounds. When two parts of a playbook disagree, the weaker one wins by default. `r` stays in the
+   latitude bucket; `K_f/K` does not. **For the concept — and it is a sign-level trap, not a
+   magnitude one — see "`K_f` is a net quantity" under Dashboard completeness before you pick a
+   target.** **[net-new: JPN]**
 3. **Single-industry first; multi-industry is a separate, non-destructive file** — its own JSON + its
    own example; the single-industry default keeps working untouched. **Two packaging choices, both
    legitimate — pick per repo, but never hand-write the file (always regenerate from the builder):**
@@ -141,15 +159,26 @@ Method → pitfall → exemplar.
 
 | Sub-block | Method | Pitfall | Exemplar |
 |---|---|---|---|
+| `start_year` | **A calibration decision, not a default: the most recent year the calibration can OBSERVE, not a projection year.** Check which anchors are observations vs extrapolations under each candidate year — the initial debt ratio is the sharp test (it must equal the debt ratio at the START of the start year, i.e. end of the prior year), and levels observed in year X (remittances/GDP, interest actuals) are data for a year-X start but extrapolations for X+1. Changing it regenerates demographics (and everything demographics-derived) via the country's regeneration tool, and re-maps the fiscal glide to the program years | Inheriting a future start year from a sibling repo: PHL shipped start 2026 while its latest data was 2025 — the packaged initial_debt_ratio 0.60 was in fact the beginning-of-2025 value (a 2026 start needed ~0.62), and the 2025-observed remittance ratio was being treated as a 2026 extrapolation | PHL (caught by the user, moved 2026→2025) |
 | Debt | `initial_debt_ratio` is *measured* (national/IMF/QPSD series); `debt_ratio_ss` is a *policy anchor* (program target/stance), a separate parameter that shapes the whole SS | Leaving `debt_ratio_ss` inherited/undocumented; not checking whether a debt-ratio jump is a **valuation effect** (FX float revaluing external debt) vs. real deterioration | IDN, ETH |
 | `zeta_D` | Default: set = `initial_foreign_debt_ratio` (assume foreign share of *new* issuance = foreign share of *stock*) | Using the realized flow when it's a crisis-period **outlier** (donor surge, debt standstill) — use the DSA's projected medium-term flow instead | USA measures the flow directly; ETH uses the DSA projection |
-| `zeta_K` | Anchor to the **normalized Chinn-Ito** openness index, then cross-check against an independent target (FDI stock/GDP or IIP foreign-capital share) — it's a marginal fill-share, so validate the level | The **`zeta_K = 0.9` placeholder** ("implies high openness") — drives domestic capital `K_d = B − D_d` negative, binds `K_d ≥ 0`, and breaks the transition | Method: IDN, ETH. The 0.9 pitfall: IDN hit it and fixed it; **OG-PHL `main` still ships 0.9** (a live example) |
+| `zeta_K` | It's a **marginal fill-share no dataset measures — calibrate it by the level it produces**: tune until the solved SS `K_f/K` matches the IIP foreign-capital share (2-3 SS solves bracket it; PHL sensitivity ≈ 0.4pp of `K_f/K` per 0.01 of `zeta_K`). The normalized Chinn-Ito index is the *prior* locating the plausible range, not the target. **Re-validate after ANY tax-side change** — tax recalibration moves domestic saving, which moves `K_f/K` at fixed `zeta_K` (PHL: honest taxes pushed 0.26→0.14; `zeta_K` 0.4→0.47 restored the 0.20 IIP anchor) | The **`zeta_K = 0.9` placeholder** ("implies high openness") — drives domestic capital `K_d = B − D_d` negative, binds `K_d ≥ 0`, and breaks the transition. Also: treating Chinn-Ito as the target and never solving for the level | Method: IDN, ETH; level-tuning executed on PHL. The 0.9 pitfall: IDN hit it and fixed it, PHL fixed it in #68 |
 | `world_int_rate_annual` | **OPEN, investment-grade:** risk-free (~4%) + country sovereign spread. **NEAR-CLOSED/DISTRESSED:** leave at the ~4% benchmark and route country risk through low `zeta_K` + the debt-elastic premium instead | Adding a spread for a defaulted/restructuring sovereign (wrong model); or leaving it undocumented | IDN (open); ETH (distressed) |
-| `g_y_annual` | Choose the growth window as **named constants** with a rationale (start after a structural break, end before the latest shock, reject unrepeatable booms). Critically, the SS is a **long-run** state, so `g_y` must be **consistent with the growth the `debt_ratio_ss` anchor assumes** (`GDP growth ≈ g_y + g_n_ss`): if the debt target is a country's stabilization *plan* built on a medium-term recovery, use that recovery's productivity growth (`= medium-term GDP growth − g_n_ss`), not the stagnant realized window | Naive "all history"/inline date arg; **or realized-stagnation `g_y` paired with a stabilization `debt_ratio_ss`** — internally inconsistent (that's the *pessimistic, debt-drifts-up* scenario), so the model's debt won't actually hold at the target | IDN, ETH, PHL. ZAF: realized 0.6% was inconsistent with the 0.765 anchor's ~1.8% growth → raised `g_y` to ~1.4% (= 1.8% − g_n 0.42%) |
-| `r_gov` base wedge (`r_gov_scale`, `r_gov_shift`) | `r_gov = scale·r − shift + premium`, and it multiplies the **whole debt stock** in `debt_service = r_gov·D` — so it is an **average/effective** real rate. Keep the LMWW **slope** (`scale`, the estimated sovereign-vs-corporate pass-through), but **re-anchor the `shift`** so the SS `r_gov` equals the country's actual real *effective* rate on debt = nominal debt-service/gross-debt (from the budget) minus expected inflation | The LMWW **intercept** is a cross-country EM average that maps a *nominal USD bond-yield* level onto the model's *real* MPK — it can over-predict a country's real borrowing cost (~0.5–0.6pp for ZAF), inflating the debt-stabilizing primary surplus and forcing spending too low. Don't use the 10-yr/ILB *marginal* yield either — that's new-issue cost, not the stock average | ZAF re-anchored to SA's ~3.7% effective real rate; PHL/IDN/ETH still ship the raw LMWW intercept |
-| Remittances `alpha_RM_1`/`alpha_RM_T`, aid `alpha_FA` | Hand-set JSON values, **never fetched**; set `alpha_RM_1 = alpha_RM_T` for no transition path, and set the companion `eta_RM` household-distribution matrix. Turning them on lets a low-income economy reproduce a real trade deficit and a fiscally sustainable government | Leaving them off for an aid/remittance-dependent economy (produces a spurious trade surplus and an implausible fiscal squeeze) | ETH (both), PHL (RM) |
+| `g_y_annual` | **Measure per HOUR, not per worker.** Labour input is people × hours × ability and steady-state hours per worker are CONSTANT, so a trend in hours per worker is transitional and must be stripped — exactly like a trending participation rate, and the two must be treated consistently (easy to strip one and leave the other). PWT via FRED: real GDP ÷ (persons engaged × average hours). JPN 2000-2019: +0.557%/yr per worker, −0.472%/yr hours, **+1.035%/yr per hour** **[net-new: JPN]**. Then choose the growth window as **named constants** with a rationale (start after a structural break, end before the latest shock, reject unrepeatable booms). Critically, the SS is a **long-run** state, so `g_y` must be **consistent with the growth the `debt_ratio_ss` anchor assumes** (`GDP growth ≈ g_y + g_n_ss`): if the debt target is a country's stabilization *plan* built on a medium-term recovery, use that recovery's productivity growth (`= medium-term GDP growth − g_n_ss`), not the stagnant realized window | Naive "all history"/inline date arg; **or realized-stagnation `g_y` paired with a stabilization `debt_ratio_ss`** — internally inconsistent (that's the *pessimistic, debt-drifts-up* scenario), so the model's debt won't actually hold at the target | IDN, ETH, PHL. ZAF: realized 0.6% was inconsistent with the 0.765 anchor's ~1.8% growth → raised `g_y` to ~1.4% (= 1.8% − g_n 0.42%) |
+| `r_gov` base wedge (`r_gov_scale`, `r_gov_shift`) | `r_gov = scale·r − shift + premium`, and it multiplies the **whole debt stock** in `debt_service = r_gov·D` — so it is an **average/effective** real rate. Keep the LMWW **slope** (`scale`, the estimated sovereign-vs-corporate pass-through), but **re-anchor the `shift`** so the SS `r_gov` equals the country's actual real *effective* rate on debt = interest payments/gross debt (take BOTH from the treasury's own cash-operations/budget report — news stories mislabel fiscal years; PHL's widely-quoted "FY2024" interest figure was actually FY2025) minus expected inflation. **Expect `r_gov < g` for many EMs** — then the debt-stabilizing primary balance `pb*` is a *deficit*, matching how such countries actually stabilize debt ratios while running primary deficits; and state the **consolidation gap** (actual primary balance vs `pb*`) explicitly in the docs, since the stable-debt SS embeds it | The LMWW **intercept** is a cross-country EM average that maps a *nominal USD bond-yield* level onto the model's *real* MPK — it over-predicted ZAF by ~0.5–0.6pp and **PHL by ~3pp** (5.1% vs the ~2.0% the Treasury pays), inflating the debt-stabilizing primary surplus and forcing spending too low. Don't use the 10-yr/ILB *marginal* yield either — that's new-issue cost, not the stock average | ZAF (~3.7%), PHL (~2.0%, `calib/remittances`); IDN/ETH still ship the raw LMWW intercept |
+| Remittances `alpha_RM_1`/`alpha_RM_T`, aid `alpha_FA` | Hand-set JSON values, **never fetched**. **Level:** use the *personal* (BPM6) remittance measure — the model's `RM` is household income from abroad — central banks often headline a GDP ratio only for the narrower *cash* (formal-channel) series, ~1pp of GDP lower; derive personal/GDP on one consistent denominator. **Path:** `alpha_RM_1 = alpha_RM_T` pins only the endpoints — `get_RM` compounds `(1+g_RM)/(e^{g_y}(1+g_n))`, so a flat RM/Y **requires `g_RM[t] = e^{g_y}(1+g_n[t-1]) − 1`, a time-varying path** (no scalar works when `g_n` moves; regenerate it with the demographics). `g_RM` is in model growth units — never the nominal-USD growth rate from a press release. The SS never reads `g_RM` (`RM_ss = alpha_RM_T·Y`), so a wrong path corrupts *only* the transition. **Distribution:** ogcore's default `eta_RM` is population-proportional; survey evidence (FIES-type) shows remittance value concentrated at the top. Build group shares as quintile mean income × remittance-share-of-income (equal-count quintiles ⇒ value share follows directly), map to the J groups by interpolating the cumulative distribution, spread per-capita over ages; note the current-vs-lifetime-income ranking caveat (overstates concentration) vs uniform-within-top-quintile (understates it). **Schema: `eta_RM` in the parameters JSON is (S,J)** — the (T+S,S,J) on a live Specifications object is internal tiling | A nominal growth rate in the `g_RM` slot: PHL shipped `g_RM = 0.03` (Dec-on-Dec USD growth) against a ~5.7% model-consistent denominator — RM/Y silently fell 35% below its calibrated share by t≈24, recovering only after t≈100, with nothing in the docs intending it. And the cash-measure trap: PHL's 0.072 came from a BSP headline that was the cash series (personal was 8.1%) | PHL (all three, fixed on `calib/remittances`); ETH (aid) |
 | Debt-elastic premium `r_gov_DY`/`r_gov_DY2` | The base wedge is a **country-agnostic** OLS inversion of Li-Magud-Werner (same numbers everywhere). Add the convex Schmitt-Grohé/Uribe term in **centered** form around `debt_ratio_ss`, expand, fold the constant into `r_gov_shift` → premium is **exactly zero at the SS target**, so it only prices transition overshoot: `r_gov_DY = -2·r_gov_DY2·D̄`, `r_gov_shift = base − r_gov_DY2·D̄²` | A live-refresh path that returns the *raw* LMW shift silently **de-centers** the premium and moves the SS — freeze it | IDN, ETH |
 | `initial_Kg_ratio` | Solve the model's own SS law of motion `K̄g/Ȳ = (1−φg)·αI / (e^{gy}(1+gn) − (1−δg))`; if the *measured* stock is far above sustainable (SOE-built boom), **start at the measured value and let it depreciate** | Inheriting the sibling-shipped `0.2` undocumented when `gamma_g > 0` (OG-Core's own default is `0.0`; PHL/ZAF/IDN/BRA all ship `0.2`, but only PHL has `gamma_g>0`, so elsewhere it's inert) | ETH only — replicate wherever `gamma_g > 0` |
+| Initial household wealth `initial_wealth_ratio` (**OG-Core #1189 — not in 0.19.0; if your resolved ogcore predates the merge, install from the PR branch**) | **Diagnose first**: without the parameter (OG-Core pre-#1189, or left at the 0.0 default), the transition imposes the SS wealth profile rescaled so aggregate B(0) = B_ss. Compute the implied per-household scale `B_ss / get_B(b_sp1, p, "SS", True)` — it measures the demographic distance between the initial and stationary populations, and anything far from 1 hands every initial household a uniform windfall (young population) or confiscation (old), which short-horizon retirees rationally consume/absorb: the fingerprint is a violent year-1-or-2 aggregate consumption spike concentrated in ages 60+ across all j, an investment collapse, a tau_c revenue pulse, and a spurious debt paydown (or the mirror images). **Fix** (`initial_wealth_ratio` arrives with OG-Core #1189 and is **not in 0.19.0** — `Specifications` has no such attribute there, so check your resolved version and install from the PR branch if needed; **the diagnostic below does not depend on it** and should be run either way): set `initial_wealth_ratio` (OG-Core #1189; wealth-to-GDP at t=0 — the anchor is STATIC within the solve because initial wealth is a predetermined state: rescaling households' initial wealth between outer-loop iterations, even damped, drives the initial cohorts into infeasible negative-consumption roots that satisfy the extended FOCs AND pass ogcore's constraint checker, which watches a different object — always read min household consumption from the pickle) from data: `(K/Y_PWT − public capital stock/Y_ICSD) × (1 − IIP foreign-owned share) + domestic-held share × D/Y`. Compute the PWT ratio from the raw current-PPP series pair (capital `CKSPPP…` over output `CGDPOS…` on FRED), never from memory — PHL moved 3.33 (2019) → 3.97 (2023). Cross-check against household-net-worth estimates (UBS databook class — expect them LOWER; they undercount EM real property) and expect initial < SS wealth ratio for a fast-growing EM (a converging-up economy). **Out-of-sample check + a tension to expect:** the initial-period foreign capital share K_f(0)/K(0) vs the IIP is untargeted and worth reporting — but where the model's K/Y overshoots the PWT (the family trait), measured household wealth and the measured foreign share CANNOT both be hit (the model fills its larger capital stock with foreign inflows). Keep the household-wealth anchor (it is the quantity the parameter IS) and document the foreign-share miss with its mechanical cause; hitting the IIP share instead would need initial wealth far above any measured household-claims construction (PHL: 4.3 vs 3.35). **Then re-tune the `alpha_G` glide under the new initial condition** — it was fit against the windfall-distorted revenue path | PHL scale factor was **1.625** (63% windfall): retirees consumed at 3–7x SS for years, C jumped 41% for one year, I_d → ~2% of long-run, debt paid down to 50% vs a 60% target — all invisible in reform-minus-baseline tables (both paths share the initial condition), so it survived every reform validation and surfaced only in level exercises. Note the model *forces* B(0) = K_d(0) + D_d(0), so the capital-side data construction IS the model-consistent measure — don't reach for household balance-sheet surveys first | PHL (diagnosis + fix, OG-Core #1188/#1189) |
+
+### Macro rows added since the table above (same columns)
+
+| Sub-block | Method | Pitfall | Exemplar |
+|---|---|---|---|
+| `delta_annual` | **Source it; no repo does.** `delta = (CFC/Y)/(K/Y)` — consumption of fixed capital from World Bank `NY.ADJ.DKAP.GN.ZS` (convert the GNI basis to GDP), `K/Y` from PWT. Decisive in a **slow- or negative-growth** economy: steady-state investment is `(g + delta)·K/Y`, so as `g → 0` depreciation is nearly the only thing generating investment demand | Leaving OG-Core's 0.05, a US value. JPN 0.05 → 0.062 moved investment 2.7pp of GDP | **[net-new: JPN]** |
+| `beta_annual` | Not observable — calibrate to the **capital-output ratio**. The firm FOC (`firm.get_r`, Cobb-Douglas) is `K/Y = (1-tau_b)·gamma / (r + delta - tau_b·delta_tau - inv_tax_credit·delta)` — write it in full, because the tax terms are not small (on JPN they move the numerator 14% and the denominator 3.5%) and an approximate `gamma/(r+delta)` will send you after the wrong lever. With `gamma` and `delta` sourced, `K/Y` is a function of `r`, and `r` is what `beta` moves; 2–3 SS solves bracket it. **`beta` is one of ELEVEN levers on `K/Y`** — see Step zero before concluding it is the binding one. **Order matters:** sourced parameters FIRST, then look at `K/Y` — if it already sits on the PWT value `beta` has no room and moving it is curve-fitting; if `K/Y` is off, `beta` is the right instrument | Leaving OG-USA's 0.96 unexamined, or moving `beta` while `K/Y` is already on target. Re-ask after ANY change to `gamma`, `delta` or `g_y` — on JPN the answer flipped twice | **[net-new: JPN]** |
+| `alpha_T` | **CASH transfers only.** Health, long-term care and education delivered IN KIND are *government final consumption* in the national accounts; in OG-Core they belong in `G`, which stays out of the household budget — not `TR`, which enters it. Split from OECD SOCX or the national social-security accounts | In-kind spending in `alpha_T` hands households income they do not have and inflates consumption directly. JPN shipped 0.075 against a true cash ~0.025 — 3x too high, the largest single error in its consumption fit. Worst wherever health care is publicly provided in kind, i.e. most of the OECD | **[net-new: JPN]** |
+| `r_gov` floor | ogcore wraps the wedge in `np.maximum(..., 0.00)` (`fiscal.py:get_r_gov`). A sovereign in a sustained negative-real-rate regime is silently clipped; the tell is a reported `r_gov` of exactly `0.0000` when the formula returns negative | It does not distort the interest bill — it distorts `pb*`, hence government spending. Measured on JPN: **0.51pp of GDP**. Report upstream; do not compensate elsewhere | **[net-new: JPN]** |
 
 ## Capital share (gamma)
 
@@ -174,6 +203,17 @@ Method → pitfall → exemplar.
   **single-scalar exponential tilt** `e_country = e_USA · exp(a·e_USA)`, solving the one scalar `a`
   (bisection) so the model Gini matches the country's target Gini. One number per country, no bespoke
   data collection.
+- **The method has TWO halves and the repos ship one.** EAPD-DRB/OG-ZAF#18 specifies (1) an
+  **age-shape** adjustment from NTA income-by-age and (2) the Gini tilt above; #63 tracks getting (1)
+  into the country repos. Shipping only the tilt leaves the *US* age profile in place — wrong wherever
+  the country's age-earnings shape differs structurally (seniority pay, mandatory retirement,
+  informality). Japan's factor is 1.09 at 55 and 0.62 at 65; peak earnings age moves 61 → 57.
+  **NTA has no API**: establish a session, POST the query to `/web/nta/download-confirm`, then POST the
+  session-scoped download form it returns **with a `Referer` header** (403 without one). The US is
+  `"US"`, not `"United States"`. Both countries must come from NTA on the same variable and variable
+  type — national wage surveys are not comparable to NTA levels. Normalise each profile over prime
+  working ages before taking the ratio, and cap it at high ages where both approach zero.
+  **[net-new: JPN]**
 - **Do NOT use the ZAF-style hardcoded-coefficient method** (`get_e_orig`, WID-then-NTA two-step with
   hand-tuned arctan extrapolation) — it needs bespoke per-country re-derivation and isn't a drop-in.
 - **Gini-concept trap [issue #33; family-wide risk]:** the target-country Gini and the US reference
@@ -199,6 +239,77 @@ Method → pitfall → exemplar.
   a wholesale file copy forgot to swap it. **Add a regression test** asserting `country_id` matches the
   country being calibrated.
 
+- **THE DATA WINDOW SILENTLY SETS THE LONG-RUN GROWTH RATE — currently wrong fleet-wide.**
+  `get_pop_objs` holds fertility, mortality and immigration constant at `final_data_year`. Every repo
+  passes `start_year + 1`, so the model sees **two years** of UN data and then frozen rates forever
+  (ogcore's own default, `start_year + 2`, is barely better). Where projected demographic change is
+  the point of the exercise this decides the answer. On Japan, widening from 2 to 74 years moved
+  `g_n_ss` from **−1.070%/yr to −0.463%** and `pb*` from a surplus to a deficit.
+  **The check:** compare the model's `g_n_ss` against the UN projection's own implied CAGR. A value
+  well outside it is a too-short window, not a demographic fact. Use the **terminal** UN rates: the
+  steady state is a long-run object, so a mid-transition snapshot is a category error. UN WPP ends at
+  2100 and ogcore asserts beyond `start_year + 74`. **[net-new: JPN — worth a fleet sweep]**
+- **A finite window leaves a discontinuity, and ogcore adds a second one.** Where the rates freeze,
+  and again at `fixper = int(1.5 * S)` (period 120 for S=80) where ogcore *replaces* the population
+  distribution with its fixed steady-state one in a single period, the transition's resource
+  constraint breaches. On JPN, 318 of 320 periods satisfied `RC_TPI` with a median residual of
+  7.96e-08; the two that failed were exactly those periods. `fixper` is invariant to any country-side
+  setting — report it upstream rather than tuning around it. **[net-new: JPN]**
+- **Cache the processed arrays.** ogcore refetches the whole UN series on every call and never reads
+  its own `download_path` back. At a wide window that is ~100s per solve, and hammering the endpoint
+  makes it fail intermittently — whereupon ogcore falls back to the offline mirror and the run dies
+  with `KeyError: '<country_id>'`, naming the wrong cause. **[net-new: JPN]**
+
+### Income-differentiated demographics (ogcore >= 0.18.0)
+
+- `get_pop_objs()` accepts `income_percentiles` (pass the model's own `lambdas` — it is not data),
+  plus `fert_gradient`, `mort_gradient`, and `infmort_gradient`: fertility and mortality tilted
+  across the lifetime-income groups instead of identical across J.
+- **The measured gradients live in
+  [EAPD-DRB/Demographic-Gradients](https://github.com/EAPD-DRB/Demographic-Gradients)** — DHS
+  fertility (TFR) and infant-mortality (IMR) tilts for ~78 countries, census household-deaths
+  adult-mortality tilts for 14, and a GNI-keyed general fallback for everyone else. It plays the
+  role for demographic *differentials* that Population-Data plays for *levels*; reference data by
+  raw URL.
+- **Before using it, fetch and follow that repo's AGENTS.md**
+  (`https://raw.githubusercontent.com/EAPD-DRB/Demographic-Gradients/main/AGENTS.md`) — it maps
+  each ogcore input to a file, states precedence, and lists the traps. It is the source of truth;
+  don't work from a copy of its rules.
+- **Check the country is actually in the library first.** It covers 78 developing countries and its
+  AGENTS.md is explicit that the income-based fallback is valid only between $200 and $10,000 GNI per
+  head — *"high-income countries are out of scope, not missing: do not extrapolate to them."*
+  Extrapolating can reverse the **sign**: in high-income countries the fertility gradient often runs
+  through marriage rates rather than family size. Leave them unset, say so, and pin the decision in a
+  test so it is not later "fixed" as an oversight. **[net-new: JPN]**
+- The two rules that change results, worth knowing before you even fetch: **divide the library's
+  tilt by 100** (it is per unit wealth rank; ogcore wants per centered percentile point — getting
+  this wrong is a silent 100× error), and **a country's own measurement beats the general
+  gradient** — always state which route was taken and the survey/census year.
+
+## Pensions
+
+OG-Core supports `"US-Style Social Security"` (the default), `"Defined Benefits"`,
+`"Notional Defined Contribution"` and `"Points System"`.
+
+- **Leaving the default applies the US benefit formula in US dollars** — AIME bend
+  points, PIA rates — to earnings scaled by `mean_income_data`, itself a US figure.
+  A pension result from an uncalibrated port is arithmetic, not validation.
+- **`alpha_db` defaults to 0.0.** Switching `pension_system` to `"Defined Benefits"`
+  without setting it silently pays **zero pensions**.
+- For a DB system `yr_contrib × alpha_db` **is** the gross replacement rate, so the
+  parameter is directly observable — but OECD replacement rates are **old-age only**,
+  while a country's pension spending also funds survivors' and disability pensions
+  that OG-Core's single block cannot separate. Expect to carry roughly
+  `OECD rate × (1 + survivors&disability share)` — about 15% more for Japan.
+- `alpha_db` is sensitive to assumed productivity growth, since OG-Core averages the
+  last `avg_earn_num_years` of earnings. Check the growth the OECD's own pension
+  modelling assumes (1.25%/yr) against yours.
+- Set `mean_income_data` in local currency, and `avg_earn_num_years` to the country's
+  actual convention (career-average vs final-salary).
+
+Validate against **public pension expenditure as a share of GDP**, not against the
+replacement rate you fed in. **[net-new: JPN]**
+
 ## Labor supply (chi_n)
 
 - **Honest default state [family]:** `chi_n` (the 80-age disutility-of-labor profile) is
@@ -208,6 +319,10 @@ Method → pitfall → exemplar.
   `estimate_chi_n` module — see issue #71).
 - **So: treat "chi_n = borrowed from OG-USA, uncalibrated" as the default state of any port, and say so
   explicitly** — never present it as calibrated.
+- **Before assuming the borrow is harmless, check total labour input per working-age person against the
+  US** (hours/worker × employment rate). Japan is within 1% — 10.5% fewer hours offset by a much higher
+  employment rate — which makes the borrow defensible rather than merely conventional. A country far
+  off that ratio has a real problem. **[net-new: JPN]**
 - To actually calibrate it: either (a) a single-scalar re-tilt analogous to the earnings Gini trick,
   matching an aggregate hours or labor-force-participation target; or (b) wire the country's labor
   force survey through a rewritten `labor.py` + a real `estimate_chi_n.py`.
@@ -216,8 +331,21 @@ Method → pitfall → exemplar.
 
 - **The universal method:** every effective rate = collections ÷ base. Apply it to PIT, `tau_c` (VAT),
   CIT (via `adjustment_factor_for_cit_receipts` × `c_corp_share_of_assets`), and `tau_payroll`
-  (statutory rate × covered share of the *wage bill*, not headcount). **Apply consistently** — OG-BRA
+  (statutory rate × covered share of the *wage bill*, not headcount — or directly: SSC collections ÷
+  the model's labor share of income). **Apply consistently** — OG-BRA
   is a cautionary tale: it discounts PIT for informality but leaves payroll at the full statutory rate.
+- **`tau_payroll` is ADDITIVE on top of the ETR function** (`income_payroll_tax_liab = T_I + T_P` in
+  ogcore `tax.py`), and with `frac_tax_payroll = 0` the combined take reports on the *iit* line while
+  the payroll line shows zero — so a statutory payroll rate silently collects on the whole wage bill
+  *in addition to* the income-tax function, invisibly. PHL: `tau_payroll = 0.14` was collecting a
+  hidden 5.8% of GDP on top of a flat 20% ETR. Audit the **combined** household take, decompose it
+  yourself (`true payroll = tau_payroll × wL/Y`), and set `frac_tax_payroll = SSC/(SSC+PIT)` so the
+  reported split matches the data split. **[PHL]**
+- **Standing check — statutory-for-effective on the bequest tax, now a THIRD family instance** (ZAF
+  `tau_bq = 0.2` collecting 3.9% of GDP; PHL `tau_bq = 0.06` collecting 1.19% vs actual estate+donor
+  collections of ~0.07%). Deductions, exemptions, and non-filing put effective estate taxation one to
+  two orders of magnitude below statutory nearly everywhere: always compute `tau_bq` from
+  collections ÷ model bequest flows, and grep every new port for this parameter. Check IDN/ETH/BRA.
 - **PIT functional form — three paths, in increasing fidelity:**
   1. *Flat `linear`* ("given limited data"): a single ETR + MTR number. Cheapest, no progressivity.
      PHL/IDN/BRA pick the number; only ETH *derives* it (revenue identity). Fine as a first pass.
@@ -242,7 +370,15 @@ Method → pitfall → exemplar.
     **`φ0` = the statutory top marginal rate** (an anchor, not a fit), fit **`φ1`** (curvature) to the
     schedule's shape, and tune **`φ2`** (scale) in-model to the PIT/GDP collections target — the
     effective-rate/informality wedge enters here, pulling the level down to actual collections.
-    (ZAF: `[0.464, 1.39288, 1.43e-8]` → PIT 10.1% of GDP, top MTR 45%.)
+    (ZAF: `[0.464, 1.39288, 1.43e-8]` → PIT 10.1% of GDP, top MTR 45%. PHL: `[0.35, 1.196, 1.9e-8]`
+    → PIT 3.12% of GDP.) Tuning mechanics **[PHL]**: the revenue response to `φ2` is **concave** —
+    top incomes sit in the saturated region where ETR ≈ φ0 regardless of φ2, so halving φ2 cuts
+    revenue by less than half; expect 2–3 in-model iterations, not one proportional step. Lowering
+    φ2 for informality acts like shifting the schedule toward higher incomes — the right shape for
+    "most earners effectively untaxed". And GS's smoothing means the sub-threshold ETR is *near*
+    zero, not zero (PHL: ~1.2% at 80% of the exempt threshold) — accept it; it is the price of never
+    going negative like HSV, and pin it in a test as a bound, not an equality. Incomes are evaluated
+    in currency units via `factor` (`mean_income_data`), so φ2 carries units `income^(−φ1)`.
   - **HSV** (`tax_func_type = "HSV"`, `λ = coef0`, `τ = coef1`): `ETR = 1 − λ·y^(−τ)`,
     `MTR = 1 − λ(1−τ)·y^(−τ)`. τ (progressivity) is scale-invariant — fit it to the schedule's shape;
     λ absorbs the income scale — tune it to collections. (ZAF's HSV fit: τ≈0.14 tracked SARS — before
@@ -277,6 +413,29 @@ Method → pitfall → exemplar.
     accounting, so any **time-varying** compliance reform yields inconsistent transition revenue
     (behavior responds, revenue doesn't). Steady states are fine; a formalization *reform* needs the
     upstream fix. Symptom: reform revenue tracks the baseline exactly while labor supply moves.
+- **Capturing non-tax and residual-tax revenue (the "unmodeled ~4% of GDP") [PHL — net-new,
+  replicate everywhere]:** OG-Core has no "other revenue" parameter, but leaving recurring non-tax
+  revenue and residual taxes out understates government resources and — through the budget identity —
+  forces model spending correspondingly too low. Map each stream to the instrument that prices the
+  same economic margin, then tune in-model to collections:
+  - *Property-type taxes* (recurrent property tax, transaction/stamp duties, local levies — the
+    OECD "other taxes" residual) → the **wealth tax**: `h_wealth = 1`, `m_wealth` small-but-positive
+    (`m = 0` divides 0/0 at `b = 0`; `0.001` works) makes `ETR_wealth ≈ p_wealth` flat, zero at zero
+    wealth, MTR → `p_wealth`. A recurrent property tax IS a flat tax on a form of wealth, so the
+    distortion lands on the correct margin (saving). PHL: `p_wealth = 0.0035` ⇒ 1.32% of GDP.
+  - *Government capital income* (SOE/central-bank dividends, state gaming shares, guarantee fees,
+    treasury interest income) + *unallocable income taxes* (final withholding on deposits etc.) →
+    the **CIT adjustment factor** — both are government takes from capital income.
+  - *Fees and charges* (user payments for services) → **`tau_c`**.
+  Discipline: use only *recurring* flows — treasuries book one-offs (fund-balance transfers,
+  privatization, concession fees) in non-tax revenue and often flag them themselves; exclude them.
+  Two OECD-accounting traps: estate/donor taxes sit *inside* the "other taxes" residual (net them
+  out or they double-count against `tau_bq`), and the income-tax *total* usually exceeds PIT + CIT —
+  the difference is the unallocable withholding, real revenue that belongs on the capital side.
+- **Statutory-for-effective errors bias REFORMS, not just levels [PHL]:** a CIT cut's simulated
+  effect **doubled** once the adjustment factor carried true collections — the statutory rate change
+  maps to a larger effective-rate change on a properly-scaled base. A calibration that over- or
+  under-states an instrument's effective rate mis-sizes every reform running through it.
 - **Watch for doc/code drift:** e.g. OG-IDN's `taxes.md` rates are stale vs. its shipped JSON.
 
 ## Fiscal consistency — using fiscal data to dial in the calibration
@@ -287,10 +446,18 @@ raises, and `debt_ratio_ss` are three independently-set knobs that MUST satisfy 
 model's transition blows up. **[net-new: ZAF, proven by TPI sims]**
 
 - **The identity.** For debt to hold at `debt_ratio_ss` in the steady state, the government must run a
-  primary balance `pb* = (r_gov − g)/(1 + g) · debt_ratio_ss`, where `g = g_y + g_n` (both in the
-  model's real, detrended units) and `r_gov` is the SS real sovereign rate. So **primary spending
-  must equal revenue − pb\***: `alpha_G + alpha_T ≈ Σ(tax revenue)/Y − pb*`. Set the spending side to
-  this, don't inherit it.
+  primary balance `pb* = (r_gov − g)/(1 + g) · debt_ratio_ss`, where `g = e^{g_y}(1 + g_n_ss) − 1`
+  (the model's real, detrended growth) and `r_gov` is the SS real sovereign rate. So **primary
+  spending must equal revenue − pb\*** — and primary spending includes public investment:
+  `alpha_G + alpha_T + alpha_I ≈ Σ(revenue)/Y − pb*` (forgetting `alpha_I ≈ 0.05` mis-sets `alpha_G`
+  by 5pp of GDP). Set the spending side to this, don't inherit it. With `r_gov < g` (common for EMs
+  after an honest `r_gov` re-anchor), `pb*` is *negative* — the country stabilizes debt while running
+  primary deficits, which usually matches its actual fiscal history. **Frame the residual honestly:**
+  after capturing all recurring revenue, the remaining gap between model `G/Y` and observed
+  government consumption should be ≈ (actual primary balance − pb*) — the country's genuine
+  consolidation distance — plus measurement differences; name it in the docs as what the stable-debt
+  SS deliberately embeds. (PHL: actual pb −2.8% vs pb* −0.7% ⇒ ~2pp embedded consolidation.) **[ZAF;
+  identity-with-`alpha_I` and the consolidation-gap framing: PHL]**
 - **Why it bites the transition, not the SS.** OG-Core's SS closure silently forces spending to the
   consistent level to hit the debt target, so the **steady state always solves and looks fine**. But
   the *transition* holds `alpha_G + alpha_T` at their input values for the first `tG1` periods before
@@ -492,7 +659,332 @@ placeholder (OG-IDN even ships the flat *anchor* gamma/Z as if calibrated). Don'
 multisector JSON as a worked example without checking `input_output.py` has the real
 `get_gamma`/`get_Z`/value-added `get_io_matrix` functions.
 
-## Validation — test the joint steady state
+## Step zero: write the equations down before you touch a parameter
+
+**Before tuning anything, produce a moment x lever table and commit it.** Not from
+convention, not from this skill's parameter tables — from the equations OG-Core
+actually evaluates, read out of `firm.py`, `aggregates.py`, `household.py`,
+`fiscal.py` and `tax.py`. It takes under an hour and it is the single highest-value
+hour in a calibration.
+
+For each target moment, write three things:
+
+1. **The closed form**, with every symbol in it. Reproduce the solved value from your
+   own formula to 4 decimals before trusting it — a mismatch means you read the wrong
+   equation, and finding that out now costs minutes.
+2. **Every parameter appearing in it**, each marked `sourced` / `tuned-to-<moment>` /
+   `DEFAULT-unexamined`.
+3. **Which other moments share those levers.**
+
+Worked example — `K/Y`, where convention names exactly one instrument (`beta`):
+
+```
+K/Y = (1 - tau_b)·gamma / (r + delta - tau_b·delta_tau - inv_tax_credit·delta)
+      [firm.get_r, Cobb-Douglas]
+
+  gamma            sourced (PWT labour share)
+  delta            sourced (CFC/K)
+  tau_b            = cit_rate x c_corp_share_of_assets x adjustment_factor
+                     c_corp_share_of_assets = 0.55 is a US DEFAULT, and note it is
+                     NOT separately identified from adjustment_factor -- only the
+                     product is
+  delta_tau        DEFAULT 0.027 (US tax depreciation)
+  inv_tax_credit   DEFAULT 0.0
+  r                NOT a parameter -- household Euler pins the PORTFOLIO return r_p,
+                     and r solves r_p = weighted avg of r (on K) and r_gov (on D).
+                     So beta, sigma, g_y, debt_ratio_ss, r_gov_scale/shift,
+                     zeta_K and world_int_rate are ALL levers on K/Y.
+
+  shares levers with: C/Y (via I), I/Y, K_f/K, r
+```
+
+That table has eleven levers. The conventional answer has one. OG-JPN tuned the one,
+watched it run out of road at `beta = 0.984`, wrote "acceptable band", and shipped —
+while `zeta_K` sat at a placeholder that closed over half the gap when set from data.
+
+**The table is also the tuning ORDER.** Sourced levers first, then the tuned dials,
+then re-check anything sharing a lever with what you moved.
+
+## Finding every lever on a moment — do this BEFORE you tune
+
+The failure this section exists to prevent, in full: OG-JPN's `K/Y` came in at 3.50
+against a PWT 3.70. `beta` is the conventional instrument, it needed 0.984, and at
+0.984 the steady state stopped solving. That was written up as an acceptable miss and
+a "family trait". It was neither. `zeta_K` — capital-account openness, sitting at a
+placeholder 0.10 that the repo's own comment labelled `NEEDS TUNING ... pending the
+IIP anchor` — closed **79% of the `K/Y` gap and 85% of a separate consumption gap**
+when set to the value the IIP data had been specifying all along. Fourteen tuning
+rounds ran without touching it.
+
+Four rules, all mechanical. None of them require noticing anything.
+
+**1. Write the model's own closed form for the moment, then list its arguments.**
+Not the conventional pairing — the equation OG-Core actually evaluates. For `K/Y`,
+`firm.get_r` gives `r = (1-tau_b)·p_m·MPK - delta + tau_b·delta_tau + tau_inv·delta`,
+so under Cobb-Douglas:
+
+```
+K/Y = (1 - tau_b)·gamma / (r + delta - tau_b·delta_tau - inv_tax_credit·delta)
+```
+
+That names **six** levers plus everything moving `r`, where convention names one
+(`beta`). Reproduce the solved value from the closed form before trusting it — if it
+does not match to 4 decimals you have the wrong equation, and finding that out costs
+minutes rather than a shipped calibration. Then extend to `r`: the household Euler
+pins the **portfolio** return `r_p`, and `r` is whatever makes the capital/debt blend
+equal it. So `debt_ratio_ss` and `r_gov` are levers on `K/Y` too — a bigger stock of
+zero-yielding government debt forces capital to pay more, which shrinks `K`.
+
+**2. Every parameter ends in one of three states, and "placeholder" is not one.**
+Sourced · tuned-to-a-named-moment · deliberately-defaulted-with-a-written-reason.
+A `NEEDS TUNING` marker is a **debt with an exit criterion**, not a note to self.
+Grep for the marker as a release gate and make it a test — `test_no_unresolved_tuning_markers`.
+The JPN comment even named the dataset to use; it shipped anyway, because nothing
+failed when it didn't.
+
+**3. Two moments that move together are ONE moment — check for shared levers before
+diagnosing either.** Build the moment × parameter table from rule 1 and look for
+overlap. JPN's consumption gap (+2.3pp) and `K/Y` gap (−0.20) were analysed
+separately for an entire calibration, including a full decomposition of consumption
+into investment / government / net exports. They were the same gap: too little capital
+means too little investment, and `C = Y - I - I_g - G - NX` makes consumption the
+residual that absorbs it. One lever closed both. **Symptom-by-symptom tuning will
+always find a spurious "structural" residual** — because fixing one symptom moves the
+other and you conclude the model can't do better.
+
+**4. A lever that runs out of road is the WRONG LEVER, not proof the gap is
+structural.** When the instrument needs a value that will not solve, or one outside
+its plausible range, that is diagnostic information about the *instrument*. Escalate
+to rule 1; do not write "acceptable band". The band language is how a calibration
+launders an untuned parameter into a family trait.
+
+**Then: sweep the defaults you did NOT source.** Perturb every unsourced parameter and
+record which target moments move. Anything that moves one materially must be sourced or
+explicitly declared — and the catch is that **relevance depends on the settings you have
+not chosen yet.** `world_int_rate` (OG-Core default `0.04`) is invisible at `zeta_K = 0.10`
+and *sets* `r` at `zeta_K = 0.78`; dropping it to 3.5% moved JPN's `K/Y` from 3.67 to 3.81
+and `K_f/K` from 17% to 27%. So high openness silently transfers the determination of the
+country's interest rate from its own households' preferences to an unsourced global
+constant. Run the sweep **after** the parameters settle, not before. **[net-new: JPN]**
+
+## Warm-starting the steady state — do this before you debug anything else
+
+**If a country's steady state will not converge, suspect the cold start before you
+suspect the calibration.** OG-Core seeds the household problem from *constants*:
+savings at a hardcoded `0.07` for every age and income group (`SS.py`, carrying its
+own `TODO: remove hardcode`), labour at 0.35, and the bequest guesses derived from
+those. For a wealthy, ageing, high-saving population that is not imprecise, it is
+catastrophic:
+
+- the bequest seed lands **two orders of magnitude low** (JPN: 134× in aggregate,
+  349× for the top income group, against solved savings of ~6.1 versus the seed's
+  0.07);
+- domestic capital `K_d = B − D_d` therefore starts **negative** — wealth near zero
+  against domestically-held government debt — so `SS_fsolve` clamps it and
+  substitutes `1e9` residuals, **destroying the finite-difference Jacobian** the
+  default `hybr` root-finder depends on; and
+- `initial_guess_factor_SS` is validated to a maximum of **500,000** while a
+  low-unit currency needs far more (JPN ~7e6, IDN worse), so the correct seed
+  cannot be entered as a parameter at all.
+
+**The failure mode disguises itself.** `run_SS` does not report failure — it
+silently restarts down a 39-rung ladder of rescaled seeds
+(`ogcore.constants.DEV_FACTOR_LIST`), making a separate `opt.root` call per rung.
+What presents as "hundreds of slow iterations" is several *failed solves stacked
+end to end*. Count restarts, not iterations: a jump in the residual of 50× or more
+between consecutive evaluations is a new rung starting, not progress.
+
+**The fix.** Seed from a state that has already solved — the household matrices
+`b` and `n` **and every outer unknown together**, so they are mutually consistent —
+and pass `factor` directly, which bypasses the validator cap. Measured on JPN,
+identical parameters, same 7-worker client:
+
+| | evaluations | restarts | residual |
+|---|---:|---:|---:|
+| cold start | >175 | several | never converged |
+| **warm start** | **18–22** | **none** | **5.5e-11** |
+
+`b` and `n` are in MODEL units, so a seed stays valid across changes to the
+currency scale, the demographic window and modest parameter moves. Ship the seed
+with the repo (it is ~9 KB) and regenerate it after any large recalibration —
+without it a fresh checkout cannot solve. Reference implementation:
+`ogjpn/warm_start.py` + `examples/save_warm_start.py`.
+
+**Warm-starting is NOT the same as retuning the seed parameters, and the difference
+matters.** Setting `initial_guess_r_SS`/`TR_SS` to their solved values was tried on
+JPN and made things *worse* — the family's existing "nearness ≠ solvability" rule.
+The scalars are 3 of 14 unknowns; the household matrices are 560 numbers and are
+what the bequest seed is computed from. Warm-start the matrices; leave the scalar
+parameters alone.
+
+**TODO — automate this.** Every country repo will hit it, and it has bitten this
+family before. The seed should be produced and reused without hand-holding:
+a `--save-warm-start` flag on the standard example that writes the seed on every
+successful solve, and an `enable()` called by default; then a shared helper so each
+repo is not re-deriving the same shim. The proper fix is upstream — ogcore should
+derive its seeds from parameters it already has (`b ≈ (K/Y + D_d/Y)·Y` from the firm
+FOC and the debt parameters) and accept a warm start — but the repo-side helper is
+worth having regardless, because it also makes reruns cheap. **[net-new: JPN]**
+
+## Dashboard completeness — an unscored moment cannot pull its parameter
+
+This is the general form of the `zeta_K` failure, and it is worth more than any
+individual parameter tip in this skill. `zeta_K` sat at a placeholder through
+fourteen tuning rounds **because `K_f/K` was not a row on the validation dashboard.**
+Nothing was wrong with the tuning loop. The loop optimised what it could see.
+
+Three rules, all checkable mechanically:
+
+**1. Every tuned parameter's identifying moment must be ON the dashboard.** If you
+tuned a dial to a target, that target is a moment — score it. Cross-check the two
+lists (`grep` the tuned dials, `grep` the dashboard rows) and require a bijection.
+A dial with no scored moment will drift, silently, and nothing will fail.
+
+**2. A dial moved to close a RESIDUAL is a free parameter, not a calibration.**
+OG-JPN's `p_wealth` and `tau_bq` were nominally tuned to property-tax and
+inheritance-tax revenue, but in practice were scaled to close the gap in *total*
+revenue — which meant they absorbed every other line's error. Tune each dial against
+its **own** moment, and let total revenue be the check that the parts add up, never
+the thing you steer.
+
+**3. Score every component of the resource constraint, not just the residual.**
+`C = Y - I - I_g - G - NX`. Scoring only `C/Y` cannot tell you which term is wrong,
+and it invites the symptom-by-symptom error above. Put `I/Y`, `I_g/Y`, `G/Y` and
+`NX/Y` on the dashboard next to it.
+
+**The moments most often tuned-for but never scored, and where the data lives:**
+
+| Moment | Parameter it identifies | Source |
+|---|---|---|
+| `K_f/K` | `zeta_K` | IIP: inward DI equity + portfolio equity, ÷ GDP ÷ `K/Y` |
+| `(I + I_g)/Y` | `delta`, `alpha_I` | national accounts GFCF — **private + public**, `I_total` alone is private |
+| `G/Y` | `alpha_G` | government final consumption. Score the SOLVED value: OG-Core's SS silently forces spending to the budget-consistent level, so it will differ from your `alpha_G` input, and that difference is information |
+| `NX/Y` | `zeta_K`, `zeta_D` | the **trade** balance, not the current account — see below |
+| property / wealth tax / Y | `p_wealth`, `h_wealth` | revenue statistics |
+| bequest tax / Y | `tau_bq` | revenue statistics |
+| `w·L/Y` (solved labour share) | validates `gamma` **and** `epsilon` | PWT `labsh`. JPN solved 0.5700 against 0.571 — a genuine free check, since nothing forces it when `epsilon != 1` |
+| wealth Gini / top shares | the `e` matrix, `beta` | household wealth surveys. Distinct from the INCOME Gini the tilt targets, and a much sharper test of an OG model |
+| `g_n_ss` | the demographic window | the UN projection's own implied CAGR |
+
+**Two traps when you add these rows:**
+
+- **Check whether the SS key is an aggregate or a per-household array.** `wealth_tax`
+  and `bequest_tax` come back shaped `(S, J)`. Summing them gives a number with no
+  units — OG-JPN got 16.7 "of GDP" — which looks so wrong it gets discarded rather
+  than debugged. Weight by `omega_SS` and `lambdas`, and sanity-check every new row
+  against a plausible magnitude before believing a gap.
+- **`NX` is the TRADE balance; the current account is a different object.** For a
+  country with a large net international investment position most of the current
+  account is primary income, not trade. Japan's CA surplus is ~3.8% of GDP against a
+  goods-and-services balance near zero — so a model `NX/Y` of 0.000 is right and
+  scoring it against 3.8% would be a concept error.
+
+**`K_f` GROSS vs NET — settle this before you tune `zeta_K`, because the two
+readings differ in SIGN for a net-creditor country.**
+
+The identity is `K = K_d + K_f` with `K_d = B − D_d`, so `K_f` reads as the
+**gross** foreign-owned share of the domestic capital stock — households hold
+domestic capital and domestic government debt, and nothing else. On that reading
+the IIP target is inward direct-investment equity (incl. reinvested earnings) +
+inward portfolio equity, ÷ GDP ÷ `K/Y`. Japan end-2024: (34.5 + 334.8) / 609 / 3.70
+= **+16.4%**, against the 1.5% a placeholder `zeta_K = 0.10` was producing.
+
+But `K_f = zeta_K·(K_demand_open − B + D_d)` is **not clamped**, and the outflow
+term `(r + delta)·K_f − new_borrowing_f + debt_service_f` reverses cleanly, so a
+*negative* `K_f` is arithmetically fine and reads as a **net** creditor position.
+Japan's net IIP is **+¥533tn, 87.5% of GDP** — on the net reading the target is
+**−23.7%**, the opposite sign.
+
+**Which to use.** The identity is the stronger argument: `K_d = B − D_d` leaves
+households no foreign asset to hold, so negative `K_f` is an unclamped edge case
+rather than a designed representation. Calibrate to **gross**. But say plainly
+what that costs — the model then omits the country's foreign portfolio entirely:
+household wealth `B` is understated by it, and the primary income it earns is
+absent from the resource constraint. For Japan that is ¥1,659tn of assets and
+roughly 3.8% of GDP a year of income. **This is a genuine OG-Core limitation, not
+a calibration choice:** there is one `K_f`, so a two-sided external balance sheet
+cannot be expressed. Check the sign of the country's NIIP, state which reading you
+took, and note the omission in the audit. **[net-new: JPN]**
+
+**Pension outlays belong in the fiscal identity.** The identity elsewhere in this
+skill reads `alpha_G + alpha_T + alpha_I ≈ revenue/Y − pb*`. For any country with a
+modelled pension system that is **incomplete** — pensions are a primary outlay like
+any other:
+
+```
+alpha_G + alpha_T + alpha_I + agg_pension_outlays/Y  =  revenue/Y − pb*
+```
+
+Omitting them sets `alpha_G` too high by the whole pension bill's worth of error
+(JPN: 0.63pp of GDP). **And the SS will not tell you** — the closure forces `G` to
+the consistent level, so the steady state solves and simply reports a `G/Y` below
+your `alpha_G` input. That silent gap between input and solved `G/Y` IS the
+diagnostic; read it every solve. The transition has no such closure for the first
+`tG1` periods, so it over-spends the full error. **[net-new: JPN]**
+
+## Validation — the near-term fiscal path FIRST, then the joint steady state
+
+**Priority, and it is the reverse of how most of this family works.** The steady state is a
+destination decades out that nobody will live in. The **near-term fiscal path is the more
+believable test**, and it should be built and scored *before* the SS dashboard is polished:
+
+- **It is checkable against things that actually happened.** Debt, primary balance and revenue for
+  the last several years are published, and the next few are projected by the IMF/OECD and by the
+  country's own medium-term fiscal framework. A model that reproduces them is credible in a way
+  that "our steady state resembles a stylised long run" never is.
+- **It is the ONLY test that can see the debt level.** In the steady state `D/Y` *is*
+  `debt_ratio_ss` — a policy anchor you chose — so scoring it there compares a choice against a
+  measurement and tells you nothing. `initial_debt_ratio` is a measurement, and only the transition
+  starts from it. **JPN shipped `initial_debt_ratio = 0.864` against an actual 1.148 — a 28pp-of-GDP
+  error — for a full day, in a file whose own `r_gov` derivation used the correct 114.8%.** The SS
+  dashboard was structurally incapable of catching it; a debt-path panel would have shown it in
+  period one. **[net-new: JPN]**
+- **It is where a fiscal miscalibration actually bites.** The SS closure silently forces spending to
+  the consistent level, so the steady state solves and looks fine no matter what. The transition
+  holds `alpha_G`/`alpha_T` at their input values for `tG1` periods and has no such protection.
+
+So: **build the path panel with the SS dashboard, not after it.** Both are required; the path is the
+one that can be falsified by next year's data.
+
+### Transition-path validation against the fiscal program [PHL — net-new; JPN — promoted to first-rank]
+
+Compare the **baseline TPI paths** of the fiscal variables against the country's own published
+program and the international projections:
+
+- **The comparison set** (model from `TPI_vars.pkl`, first ~10–15 years): primary balance
+  (`total_tax_revenue − total_primary_government_outlays`)/Y vs the treasury's actual primary
+  balance + the medium-term program's (deficit path less programmed interest); `D/Y` vs actual debt
+  ratios + the program's trajectory/targets; total revenue/Y vs the program's revenue effort **with
+  a stated concept bridge** (model revenue is general-government accrual + captured non-tax; NG cash
+  programs need a wedge — derive it from one overlap year of OECD-vs-treasury data and hold it
+  constant); `I_g/Y` vs the program's infrastructure path. Sources: the MTFF-class medium-term
+  fiscal framework (deficit/revenue/disbursement/infra paths), the budget document (interest
+  projections, to convert deficit→primary), treasury cash-operations reports (actuals).
+- **The alpha_G glide — put the transition on the government's consolidation schedule.** A flat
+  identity-value `alpha_G` makes the model consolidate *immediately* (pb jumps to pb* in year one,
+  typically years ahead of the actual plan), which pays debt far below target early (PHL: down to
+  ~48% vs a 58–61% program band) before the closure brings it back. Instead set `alpha_G` as a
+  declining path: `alpha_G(t) = SS_revenue_share − pb_program(t) − alpha_T − alpha_I(t)` for each
+  program year, **capped at the identity-consistent value from the year the program's primary
+  balance crosses the model's pb*** (don't chase extended-projection years tighter than pb* — that
+  re-introduces the undershoot). The SS is untouched (the closure ignores `alpha_G`); only the
+  transition's stance changes. Bonus validation: if the program's own consolidation converges to
+  pb* near the end of the program window, the steady state is literally where the government's plan
+  is headed — say so in the docs.
+- **A violent early-transition spike is a diagnosis, not a feature.** A one-to-two year consumption
+  / consumption-tax-revenue pulse at the start of the baseline is the fingerprint of the imposed
+  initial-wealth condition (see the `initial_wealth_ratio` row in the macro table) — check the
+  B_ss/B0 scale factor and fix it with the parameter BEFORE labeling anything benign. (An earlier
+  version of this skill advised documenting the spike as "transition dynamics"; that normalized a
+  fixable artifact.) The dynamics that legitimately remain after the fix: convergence from a
+  non-stationary initial age distribution and capital stock, and — under a fiscal glide — the
+  early-transition growth rate exceeding its long-run value, which erodes the debt ratio before the
+  arithmetic tightens. Never tune fiscal parameters against whatever residual is left.
+- **Deliverable:** a small multi-panel figure (debt ratio, primary balance, revenue, public
+  investment; model line vs actual dots vs program markers) committed to the docs images with a
+  caption naming every source, referenced from the macro chapter's validation section — and axis
+  limits that show the model's full path (clipping the divergence you're testing for defeats the
+  exercise).
 
 - **Build a steady-state validation dashboard [emerging: IDN, ETH — adopt it].** A table in `macro.md`
   comparing the solved SS to country data targets, each with a source column. Recurring moments: `D/Y`,
@@ -515,7 +1007,12 @@ multisector JSON as a worked example without checking `input_output.py` has the 
      social-security agencies you didn't know existed. Their publications outrank everything else.
   2. **Official international compilations of national data** — IMF (Article IV statistical
      appendix, GFS, WEO), World Bank, UN, ILO, PWT — often the same national numbers, re-published
-     with a lag and on standardized definitions (useful for cross-checks, weaker on vintage).
+     with a lag and on standardized definitions (useful for cross-checks, weaker on vintage). For
+     the whole revenue side, the **OECD Revenue Statistics country note** (Asia-Pacific / LAC /
+     Africa editions, free 4-page PDFs) is the single best table in the family's experience **[PHL]**:
+     every instrument as % of GDP on one accrual basis and one GDP vintage — PIT, CIT, SSC, VAT,
+     excises, customs, and an "other taxes" residual. Pair it with the treasury's cash-operations
+     report for non-tax revenue, interest payments, and the actual primary balance.
   3. **Regional development banks and bodies** — AfDB/ADB/IADB/EBRD country diagnostics, regional
      statistical commissions — frequently carry country detail (sector data, informality, fiscal
      risk) that neither the national site nor the IMF publishes cleanly.
@@ -544,6 +1041,25 @@ multisector JSON as a worked example without checking `input_output.py` has the 
   mis-aggregated — fix that before reading anything else off the multi-industry SS.
 - **Note derived quantities honestly:** e.g. "net exports" is a balance-of-payments *residual* of the
   resource constraint (OG-Core has no trade sector), not a modeled export/import.
+- **Consumption is a residual — diagnose it, never tune to it [net-new: JPN].** There is no
+  consumption parameter: `C = Y − I − I_g − G − NX`, so a consumption gap is *identically* the sum of
+  the other three. Decompose it; each piece has its own cause. Related trap: **`I_total` in the SS
+  output is PRIVATE investment**, while national-accounts GFCF is private *plus* public — compare
+  `I_total + I_g`, or the gap is overstated by all of public investment.
+- **`g_n` is a path; the steady state uses its terminal value [net-new: JPN].** For a country
+  mid-demographic-transition those are very different numbers (JPN: −0.33% today, −0.46% terminal), so
+  a steady-state moment that depends on `g` — investment above all — will look wrong against *today's*
+  data even when the calibration is right. The honest comparison for "does this look like the country
+  now" is the early transition. Say which one a dashboard row is scoring.
+- **Pair the debt concept with the interest concept [net-new: JPN].** Where a government holds large
+  financial assets, net and gross debt differ enormously: net debt must be paired with *net* interest,
+  gross with the effective rate on *gross*. The test is whether `r_gov × D` reproduces the actual
+  interest bill. Either pairing is defensible; mixing them is not.
+- **Audit each instrument's BASE, not just its yield [net-new: JPN].** A right total can sit on a wrong
+  rate applied to a wrong base, and only the base test separates them. A rate tuned in-model to a
+  revenue target on a base the model gets wrong gives the right *level* and the wrong *reform
+  response* — so **size reforms by the revenue they must raise, not by the rate change**, which cancels
+  the base error because the same base appears in numerator and denominator.
 - **Know the family traits before "fixing" them:** the model's endogenous `K/Y` runs high against the
   PWT across the whole family (ZAF 4.5 vs 3.7; PHL 4.3) — a structural feature of the saving/return
   block, not a country-calibration error. Report it with a written reason in the dashboard's ballpark
@@ -554,6 +1070,70 @@ multisector JSON as a worked example without checking `input_output.py` has the 
 - **Prevent doc/JSON drift with `{glue:text}` [emerging: ETH — adopt it].** A hidden code-cell in the
   docs loads the packaged JSON and `glue()`s the numbers, so prose can never drift from the shipped
   values.
+- **The in-model tuning loop is cheap — use real solves, not algebra [PHL].** A warm-guess SS solve
+  is ~15s (single worker, no dask), so the workflow *solve → read revenue dashboard → adjust dials →
+  re-solve* converges in 3–5 iterations for half a dozen simultaneous dials (GS φ2, `tau_c`, CIT
+  adjustment, `p_wealth`, `r_gov_shift`, `zeta_K`). Keep a driver script that loads the packaged
+  JSON + an overrides dict, solves SS-only, and prints model-vs-target by instrument. Always finish
+  with a **standalone solve of the packaged JSON itself** (no overrides) — it catches schema errors
+  and guess problems the overrides path hides.
+- **Run engineering: call the model the way the example scripts do — everything through the client.**
+  Every sibling `run_og_<country>.py` does `num_workers = min(cpu_count(), 7)`, one
+  `Client(n_workers=num_workers, threads_per_worker=1)`, and **one**
+  `runner(p, time_path=True, client=client)` per scenario. The steady state solves through the client
+  too. That is slower on the SS — measured ~38s per GE evaluation against ~6s serial — and it is the
+  accepted price of invoking the model exactly as the family does rather than through a hand-rolled
+  driver that can differ subtly from the shipped path. **`min(cpu_count(), 7)` is not a guess:** both
+  `SS.py` and `TPI.py` parallelise with `client.submit` inside `for j in range(p.J)` and `J = 7`, so an
+  eighth worker idles — seven IS maximum parallelism, on any machine. **The trap to avoid**, because it
+  looks like an optimisation and is neither pattern: `runner` **always re-solves the steady state**, so
+  stacking `runner(time_path=False)` then `runner(time_path=True, client=client)` solves it twice, the
+  second time the slow way round. `TPI_outer_method = "anderson"` belongs in the packaged parameters,
+  not the script — and note it is **TPI-only**: it appears zero times in `SS.py`, so it does nothing for
+  a steady-state problem. **[net-new: JPN, superseding the earlier SS-serial advice]**
+
+
+- **Triage an `RC_error` by WHERE IN TIME it happens [net-new: JPN].** ogcore pickles TPI output
+  *before* it raises, so read `TPI_vars.pkl["resource_constraint_error"]` even from a failed run. The
+  location is the diagnosis: **smooth and decaying over the first several periods** → initial
+  condition, i.e. `initial_wealth_ratio` (the PHL windfall); **isolated single-period spikes** → a
+  discontinuity in a time-varying input at exactly that period (check `rho`, `imm_rates`, `omega`,
+  `retire`, `etr_params` for a jump — this is how the demographic-window and `fixper` problems
+  surfaced); **growing along the path with debt rising** → the fiscal runaway. Check the outer-loop
+  distance series first: if it fell monotonically and debt is flat, the solver is fine and the problem
+  is an input.
+- **The tuning loop converges in 3–5 rounds only once the SOURCED parameters are settled
+  [net-new: JPN].** Any change to a sourced parameter invalidates every tuned dial below it, because
+  they were fitted against the old base. Work in this order and expect one full retune per upstream
+  correction: (1) sourced structurals — `gamma`, `delta`, `g_y`, the demographic window, spending
+  shares; (2) tuned tax dials against the revenue targets; (3) `beta` against `K/Y`; (4) retune (2) if
+  (3) moved the bases. JPN took **fourteen** rounds because `gamma`, `delta`, `g_y`, `alpha_T` and the
+  window were each corrected *after* the tax dials were tuned. Audit the whole parameter surface
+  BEFORE starting the loop, not one parameter at a time.
+- **Verify BOTH tails of every path, and read the figure you just made [PHL — a caught error].** A
+  min-only check on the debt path ("trough = 60.0, stays on target") passed while the path actually
+  climbed to 74% — the check tested only the direction the PREVIOUS failure pointed. For every path
+  claim report min AND max with their years, and eyeball the plotted line before writing the
+  sentence about it.
+- **Running a country model against an unreleased ogcore branch [PHL].** `uv run --with-editable
+  <ogcore-checkout>` can silently resolve ogcore from the uv CACHE, and probing with `python -c`
+  from the checkout root masks it via cwd shadowing. The working pattern: run from the ogcore
+  checkout's env with the country repo overlaid (`cd OG-Core && uv run --with-editable ../OG-XXX
+  python driver.py`), pin `sys.path.insert(0, <ogcore-checkout>)` in the driver, and `assert
+  <checkout> in ogcore.__file__` before anything else — the assert has caught real contamination.
+  Keep the packaged JSON loadable on RELEASED ogcore too: tests that build a `Specifications`
+  strip not-yet-released parameters when absent (`hasattr` guard), so the suite stays green on
+  both.
+- **Initial-guess fragility: nearness ≠ solvability [PHL].** Guesses retuned to the *exact* solved
+  values (factor to 5 digits) sent the solver through a `K_d < 0` region and failed the SS, while
+  older, farther guesses converged cleanly. Choose packaged guesses by solve-path robustness — keep
+  the set that works, don't chase proximity. Relatedly, transient `"K_d has negative elements"`
+  warnings during iteration are benign **iff** the identities hold in the saved pickle
+  (`K = K_d + K_f`, `K_d = B − D_d`) — check the pickle, not the console.
+- **Derived parameters regenerate together [PHL].** Anything computed *from* demographics —
+  the model-consistent `g_RM` path (from `g_n`), the `eta_RM` matrix (from `omega_SS`) — belongs in
+  the demographics-regeneration tool so a demographics rebuild can't leave it stale, with a test
+  asserting packaged value == constructor(packaged inputs).
 
 ## House rules (lift verbatim into any port)
 
@@ -567,8 +1147,32 @@ multisector JSON as a worked example without checking `input_output.py` has the 
 - **Ask before push, ask before PR — never in the same step.** PR style: narrative, plain language,
   explain the *why*, push detail to the docs; a changed-parameters table + a steady-state-lands table +
   an example macro-results table.
+- **Family approval gates apply** (the OG family README): calibrate, edit, and commit locally
+  freely — but launching solves beyond a quick SS check, pushing, PR-opening, and anything
+  fleet-scale are proposed and wait for the user's explicit call. Never merge.
 
 ### Preparing the calibration PR — what maintainers actually ask for [PHL #63 review, jdebacker]
+
+- **Register: the PR reports what was done; the docs carry the discussion.** State each change and
+  its anchor in a line or two ("unmodeled recurring revenue is carried by the nearest-equivalent
+  instruments: property-type taxes on the wealth tax, state-asset income on the CIT adjustment, fees
+  on `tau_c`") and point to the calibration chapter for the derivation, the alternatives, and the
+  caveats. Design-justification paragraphs ("worth review", "the honest carrier", why-not-X) belong
+  in the PR **only when explicitly asking the maintainers to decide something** — otherwise they
+  read as asking for a debate nobody requested. **[PHL #85 feedback]**
+- **Always include the goodness-of-fit table** — the standard close for any calibration PR: every
+  calibrated moment, `Model | Target | Source`, one row per anchor, revenue lines first, then the
+  external/fiscal anchors. Read the model column from the solved SS pickle, never from memory:
+
+  | Moment | Model | Target | Source |
+  |---|---|---|---|
+  | PIT/Y … each revenue instrument … | | | collections source (e.g. OECD RevStats) |
+  | total revenue/Y | | | |
+  | RM/Y, K_f/K, D/Y, D_f/D, r_gov | | | BSP/BTr-class anchors |
+
+  Follow it with the tested block (suite count, SS RC error, TPI RC error vs tolerance, debt-path
+  behavior vs target) and the reform percent-change table (Y/C/K/L/r/w by year + SS), the same
+  format across the family (see PHL #68/#85).
 
 - **Show the before/after of every calibrated object the PR changes — upfront, don't make them ask.**
   On PHL #63 the maintainer's first request was a *new-vs-old side-by-side of the `io_matrix`*. For each
@@ -601,6 +1205,16 @@ reform + output tables); the earnings tilt is solved inside `income.py`'s
 `ogcore.utils.safe_read_pickle` on `.../OUTPUT_BASELINE/SS/SS_vars.pkl`, `.../TPI/TPI_vars.pkl`, and
 `model_params.pkl` (then form ratios like `K_f/Y`, `C/Y`, revenue/GDP).
 
+0a. **Two dashboards, built together: the near-term fiscal PATH and the steady state.** The path
+   panel (debt, primary balance, revenue, public investment vs actuals + the country's program) is
+   the falsifiable one and catches the errors the SS cannot see — above all a wrong
+   `initial_debt_ratio`, which the SS scores against a policy anchor rather than data. Do not defer
+   it to "after the SS validates". **[net-new: JPN]**
+0. **Step zero, before any parameter is touched: write the moment x lever table** from OG-Core's own
+   equations (see *Step zero*), and build the validation dashboard from it — one row per moment you
+   intend to hit, and a row for every component of the resource constraint. **Dashboard first, tuning
+   second.** OG-JPN did it the other way round and a placeholder `zeta_K` survived fourteen tuning
+   rounds because `K_f/K` was never scored. **[net-new: JPN]**
 1. Bootstrap from the closest sibling repo; **immediately fix the copied `country_id`, package name,
    and `egg-info`** (the #1 copy-paste regression).
 2. Environment: `uv sync --extra dev`; confirm the resolved ogcore in `uv.lock` matches the EAPD
@@ -609,17 +1223,29 @@ reform + output tables); the earnings tilt is solved inside `income.py`'s
    population growth is sane.
 4. Earnings: set the country's earnings-concept Gini (WID, matching the US reference concept); solve
    the tilt scalar.
-5. Macro block: debt (initial measured, SS anchored), `zeta_K` (Chinn-Ito + cross-check), world rate
-   (open vs distressed fork), `g_y` window (named constants), remittances/aid if material, the centered
-   debt-elastic premium, `initial_Kg_ratio` if `gamma_g > 0`.
+5. Macro block: debt (initial measured, SS anchored), `zeta_K` (Chinn-Ito prior, tuned to the IIP
+   foreign-capital level — re-validate after step 7), world rate (open vs distressed fork), `g_y`
+   window (named constants), remittances if material (personal measure; model-consistent `g_RM`
+   path; `eta_RM` from survey concentration) / aid, `r_gov` re-anchored to the treasury's effective
+   real rate, the centered debt-elastic premium, `initial_Kg_ratio` if `gamma_g > 0`.
 6. Capital share: `1 − labor_share`, Gollin-adjusted if agrarian/informal; **remove gamma from the
    live-API path** so it can't be clobbered.
-7. Taxes: for PIT, prefer a **progressive form fit to the statutory schedule** over a flat rate
-   whenever a schedule exists — **GS by default** (φ0 = statutory top rate, φ1 to the shape, φ2 to
-   collections; floors ETR at 0); take VAT/CIT/payroll as effective rates from collections; pick the
-   informality rung the data supports.
+7. Taxes — anchor to the OECD Revenue Statistics country note by instrument: for PIT, prefer a
+   **progressive form fit to the statutory schedule** over a flat rate whenever a schedule exists —
+   **GS by default** (φ0 = statutory top rate, φ1 to the shape, φ2 to collections; floors ETR at 0);
+   take VAT/CIT/payroll/bequest as effective rates from collections (payroll is *additive* to the
+   ETR function — audit the combined take; bequest effective is typically 1–2 orders below
+   statutory); capture recurring non-tax and property-type revenue on the nearest-margin instruments
+   (wealth tax / CIT adjustment / `tau_c`); close the budget identity
+   (`alpha_G = revenue − pb* − alpha_T − alpha_I`); pick the informality rung the data supports.
 8. `chi_n`: leave at the US values but **document it as uncalibrated**, or re-tilt to an hours target.
 9. Validate: build the steady-state dashboard; check revenue by instrument; add the value-pinning test.
+   **Run a baseline TPI too** — the steady state consumes one number from each time-varying path (its
+   terminal value), so an entire mis-specified path is invisible to it. On JPN a wrong demographic
+   window survived eleven steady-state tuning rounds with every fiscal moment inside 0.2pp of GDP, and
+   one transition run caught it.
+9b. **Save a warm-start seed** from the first solve that converges, and ship it. Without one the next
+   port of this calibration may not solve at all — see the warm-start section.
 10. (Optional) Multi-industry: source the SAM (national SUTs → UNU-WIDER/IFPRI → modeled databases;
     vintage matched to the LFS year); assert the concordances partition it; build the 5 SAM inputs,
     numeraire industry last; try the direct solve first (`nu≈0.2`; continuation only as fallback);

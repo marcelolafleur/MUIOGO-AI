@@ -20,7 +20,8 @@ calibration.
 
 **Do not use historical observations to make model results match history.** The test, applied
 to any parameter or constraint: *would this exact change still be made if no historical
-outcome were known?* If no, defer it to calibration. Binding for this whole workflow,
+outcome were known?* If no, do not apply it; retain the observation as a diagnostic benchmark
+or gap for later assessment. Binding for this whole workflow,
 including the MUIO phase. Before delivery, `python scripts/audit_no_forcing.py` must report
 zero failures.
 
@@ -210,4 +211,5 @@ Report solver success as technical validity only.
 
 - `clews-model-fix` — structural cleanup that cannot change a solved value.
 - `clews-model-review`, `assess-clews-calibration` — checking what you built.
-- `calibrate-clews-model` — the separate later calibration stage.
+- `calibrate-clews-model` — replace generic inputs with sourced country data and repair
+  physical connections after the basic solved build exists.
