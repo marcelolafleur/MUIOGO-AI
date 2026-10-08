@@ -1,6 +1,6 @@
 ---
 name: og-run
-description: Runs an OG-Core country macroeconomic model the way its example scripts do - baseline and reform from the model's own environment, in parallel, with the Anderson solver - builds a multi-industry calibration, monitors the run and collects the output. Use when asked to run, solve or re-run an OG country model (OG-USA/PHL/ZAF/IDN/BRA/ETH), to produce a baseline or reform, or when another skill needs OG output that does not exist yet.
+description: Installs an OG-Core model (OG-Core or a country repo) with OG-Core's official installer and runs its shipped example script unchanged - baseline and reform from that install's own environment, in parallel, with the Anderson solver - builds a multi-industry calibration, monitors the run and collects the output. Use when asked to run, solve or re-run an OG model (OG-Core, OG-USA/PHL/ZAF/IDN/BRA/ETH), to produce a baseline or reform, to benchmark or test a code change, to check whether the model fails or misbehaves, or when another skill needs OG output that does not exist yet.
 ---
 
 # Run an OG-Core country model
@@ -12,7 +12,8 @@ launching one as a decision the user makes.
 The model owner's run rules are in `../OG_RUN_RULES.md` and win over anything older,
 including the AGENTS.md estimate of "~35 min – 2 hr" for a full example run. In short: a healthy
 baseline takes **under ten minutes** (steady state in seconds to a minute or two, transition path
-about 5–7 minutes); run **the way the example scripts do**, from the repo's own environment;
+about 5–7 minutes); **install with OG-Core's official installer** (`scripts/install.sh`) and run
+**the shipped example script unchanged** from that install's environment, with nothing added;
 **always parallel**; the **Anderson** solver with `nu` 0.2 or lower, checking both values, since
 some repos set Anderson but leave `nu` at 0.4; validation runs offline; launch only on the user's
 explicit go.
@@ -29,7 +30,31 @@ the other. Full rules: `../WORLD_DISCIPLINE.md`.
 Orient first with `muiogo-ai status` (see `muiogo-workspace`) to find the installed
 country models. Each lives in its own checkout with its own `.venv`.
 
+## Install first, with the official installer
+
+Every run whose result you will report starts from a copy installed by OG-Core's installer, as
+`scripts/QUICK_INSTALL.md` in PSLmodels/OG-Core describes. Do not build the environment by hand
+(conda, `uv sync` in a worktree you made, `PYTHONPATH`, `pip install -e` of another checkout).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PSLmodels/OG-Core/master/scripts/install.sh -o install.sh
+mkdir -p <new parent folder>
+bash install.sh --repo <key> --dest <new parent folder> --yes     # --list shows the keys
+# a branch or fork under test, into its own folder:
+bash install.sh --repo-url <git URL> --branch <branch> --dest <another new folder> --yes
+```
+
+The installer clones the repo, runs `uv sync --extra dev`, and checks the import. It refuses a
+parent folder that does not exist, so create it first. Use a new folder: never install over a
+checkout that holds someone's work.
+
 ## The rule that matters most
+
+**Run the shipped example, unchanged, from the installed copy's own environment and directory.**
+No driver script of your own, no edited copy, no changed settings, no monkeypatching, and nothing
+injected to observe the run (wrappers, counters, `sitecustomize`, dask worker plugins). To learn
+something about a run, read its saved output afterwards. A result from anything else is a lead,
+not a finding: say so, and never report a model failure from it.
 
 **Run the model from its own environment, from its own directory.** Never import
 an OG package into another environment, and never run a country model with
@@ -56,10 +81,13 @@ ls examples/
 ```
 
 They take no arguments; the reform is expressed inside the script as parameter
-updates. Run one with the model's own environment:
+updates. Run one from the installed folder with its own environment, exactly as the
+installer's instructions say:
 
 ```bash
-uv run python examples/run_og_phl.py
+cd <installed folder>/OG-PHL
+source .venv/bin/activate
+python examples/run_og_phl.py          # or, equivalently: uv run python examples/run_og_phl.py
 ```
 
 What it does: starts a pool of worker processes (`min(cpu_count, 7)`, one thread each),
@@ -71,9 +99,9 @@ working directory. Each stage writes `SS/SS_vars.pkl`, `TPI/TPI_vars.pkl` and
 
 Set the solver the way the owner's rules require: `TPI_outer_method="anderson"` and a `nu` of
 0.2 or lower belong in the repo's packaged parameters, not in a one-off script
-(`og-country-calibration` covers this). If the repo does not set them yet, say so and ask
-whether to propose that change first; running with a copy of the example that sets them is
-the fallback, and say that you did it.
+(`og-country-calibration` covers this). If the repo does not set them yet, run the example as
+shipped and say so, and ask whether to propose the parameter change. Do not make a copy of the
+example with different settings unless the user asks for one.
 
 Propose the run with its expected duration (under ten minutes for a healthy baseline, the
 reform about the same) and wait for the user's explicit go. There is no cheap smoke version: the
@@ -124,8 +152,8 @@ being asked:
   ogcore version or a cold start, not the worker count.
 - **On time?** Past about ten minutes for a baseline, check the setup before waiting longer.
 
-To change what is solved, do not edit the shipped example in place. Copy it and change
-only what the run needs: the reform's parameter dictionary, the solver settings above, and
+To change what is solved (only when the user asked for a different scenario or setting),
+do not edit the shipped example in place. Copy it and change only what the run needs: the reform's parameter dictionary, the solver settings above, and
 the output folder. Keep the example's structure (the worker pool, the calibration call, the
 runner), because the owner's rule is to run the way the examples do. Say which parameters
 you changed. `og-country-calibration` covers which parameters are defensible to
@@ -171,6 +199,10 @@ Never edit files inside an OUTPUT directory. To redo a run, re-solve.
 Copy this and work through it:
 
 ```
+- [ ] Installed with OG-Core's official installer (scripts/install.sh) into a new folder;
+      a branch under test gets its own install (--repo-url ... --branch ...).
+- [ ] The run is the shipped example script, unchanged, nothing injected. Any deviation was
+      asked for by the user and will be named in the report.
 - [ ] og-run-preflight reports GO for the repo and branch the task names.
       If NO-GO: fix what it names and run it again. Do not launch.
 - [ ] Solver set: TPI_outer_method="anderson", nu 0.2 or lower (repo default or the copy).

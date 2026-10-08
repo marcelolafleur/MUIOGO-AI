@@ -103,6 +103,11 @@ loud before launching: "running with N uncommitted changes in <repo>."
   assert catches a bad *re*-launch weeks later.
 - **Run as a user would**: the documented CLI from the checkout's own env. If the preflight only
   passes under some ad-hoc invocation, the environment is wrong, not the preflight.
+- **The checkout itself must come from OG-Core's official installer** (`scripts/install.sh`, see
+  og-run). A GO on a hand-built environment (a worktree you made and `uv sync`ed, a conda env, a
+  `PYTHONPATH` shadow) is not a GO for a reported run: install it properly and preflight that.
+  Also confirm the entry script is the shipped example, unchanged (`git status` clean in the
+  install), and that nothing is injected (`PYTHONPATH` unset, no `sitecustomize` on the path).
 - **A GO is a precondition, not an authorization.** This skill never launches the run itself.
   A healthy baseline solve takes under ten minutes when run the way the example scripts run
   it, in parallel, with the Anderson solver (the model owner's rules, `../OG_RUN_RULES.md`); batteries are

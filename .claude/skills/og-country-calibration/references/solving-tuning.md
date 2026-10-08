@@ -15,8 +15,10 @@ Contents
 
 ## Environment
 
-- **uv, not conda.** `uv sync --extra dev`, then `uv run <cmd>`. `AGENTS.md` is the source of truth
-  for setup; `docs/book/content/contributing/contributor_guide.md` is stale (still conda) in most
+- **uv, not conda, through the official installer.** Install with OG-Core's `scripts/install.sh`
+  (it runs `uv sync --extra dev` for you), then run the shipped example from that install
+  (`../OG_RUN_RULES.md`). `AGENTS.md` is the source of truth for anything the installer does not
+  cover; `docs/book/content/contributing/contributor_guide.md` is stale (still conda) in most
   repos. **[family]**
 - **Never commit a `uv.lock` change from calibration work.** The lock is Dependabot-managed; if a
   local `uv sync` touches it, `git restore uv.lock`. Confirm `uv.lock` and `.python-version` are not
